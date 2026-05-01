@@ -322,8 +322,6 @@ const calcStats = (playerId, matches, players) => {
   return { matchWins, matchLosses, setsWon, setsLost, gamesWon, gamesLost, winRate, h2hList, played: completed.length };
 };
 
-const DEFAULT_PASSWORD = 'tennis123';
-
 /* ============================================================
    LOGIN SCREEN
    ============================================================ */
@@ -1703,15 +1701,41 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
     setShowPasswordChange(false);
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onUpdateProfile({ profileImage: reader.result });
-    };
-    reader.readAsDataURL(file);
+
+    try {
+      // Upload to Supabase Storage
+      const ext = file.name.split('.').pop();
+      const fileName = `${me.id}-${Date.now()}.${ext}`;
+      const formData = new FormData();
+      formData.append('', file);
+
+      const uploadRes = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/avatars/${fileName}`,
+        {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!uploadRes.ok) throw new Error('Upload failed');
+
+      // Get public URL
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${fileName}`;
+      onUpdateProfile({ profileImage: publicUrl });
+    } catch (err) {
+      console.error('Image upload error:', err);
+      // Fallback to base64
+      const reader = new FileReader();
+      reader.onloadend = () => onUpdateProfile({ profileImage: reader.result });
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSaveProfile = () => {
