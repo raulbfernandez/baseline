@@ -322,8 +322,6 @@ const calcStats = (playerId, matches, players) => {
   return { matchWins, matchLosses, setsWon, setsLost, gamesWon, gamesLost, winRate, h2hList, played: completed.length };
 };
 
-const DEFAULT_PASSWORD = 'tennis123';
-
 /* ============================================================
    LOGIN SCREEN
    ============================================================ */
