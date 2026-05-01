@@ -2144,10 +2144,6 @@ function ActivityView({ matches, players, onViewProfile }) {
         return (
           <div key={m.id} className="rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}` }}>
             <div className="text-[10px] uppercase tracking-[0.2em] mb-3" style={{ color: C.inkMute }}>{fmtDate(m.date)}</div>
-            {/* Score */}
-            <div className="text-center mb-3">
-              <span className="text-[11px] font-semibold px-3 py-1 rounded-full" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink, background: C.parchmentWarm, whiteSpace: 'nowrap' }}>{m.score}</span>
-            </div>
             <div className="flex items-center justify-between gap-3">
               {/* Winner */}
               <button onClick={() => onViewProfile(winner)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
@@ -2174,6 +2170,10 @@ function ActivityView({ matches, players, onViewProfile }) {
                   : <Avatar name={loser.name} size={48} />
                 }
               </button>
+            </div>
+            {/* Score */}
+            <div className="text-center mt-3">
+              <span className="text-[11px] font-semibold px-3 py-1 rounded-full" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink, background: C.parchmentWarm, whiteSpace: 'nowrap' }}>{m.score}</span>
             </div>
           </div>
         );
