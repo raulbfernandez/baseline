@@ -1658,12 +1658,138 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
 /* ============================================================
    PROFILE VIEW
    ============================================================ */
+function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
+  const canvasRef = React.useRef(null);
+  const [scale, setScale] = React.useState(1);
+  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = React.useState(false);
+  const [dragStart, setDragStart] = React.useState(null);
+  const imgRef = React.useRef(null);
+  const SIZE = 280;
+
+  React.useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      drawCanvas(img, scale, offset);
+    };
+    img.src = imageSrc;
+  }, [imageSrc]);
+
+  const drawCanvas = (img, sc, off) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    const fitted = Math.min(SIZE / img.width, SIZE / img.height) * sc;
+    const w = img.width * fitted;
+    const h = img.height * fitted;
+    const x = SIZE / 2 - w / 2 + off.x;
+    const y = SIZE / 2 - h / 2 + off.y;
+    ctx.drawImage(img, x, y, w, h);
+    // dark overlay outside circle
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // circle border
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 4, 0, Math.PI * 2);
+    ctx.stroke();
+  };
+
+  React.useEffect(() => {
+    if (imgRef.current) drawCanvas(imgRef.current, scale, offset);
+  }, [scale, offset]);
+
+  const getPos = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+  };
+
+  const onDown = (e) => { e.preventDefault(); setDragging(true); setDragStart(getPos(e)); };
+  const onMove = (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    setOffset(o => ({ x: o.x + pos.x - dragStart.x, y: o.y + pos.y - dragStart.y }));
+    setDragStart(pos);
+  };
+  const onUp = () => setDragging(false);
+
+  const handleConfirm = () => {
+    const canvas = canvasRef.current;
+    const out = document.createElement('canvas');
+    out.width = 400; out.height = 400;
+    const ctx = out.getContext('2d');
+    ctx.beginPath();
+    ctx.arc(200, 200, 200, 0, Math.PI * 2);
+    ctx.clip();
+    // draw at 400x400 scale
+    const img = imgRef.current;
+    const fitted = Math.min(SIZE / img.width, SIZE / img.height) * scale;
+    const ratio = 400 / SIZE;
+    const w = img.width * fitted * ratio;
+    const h = img.height * fitted * ratio;
+    const x = 200 - (SIZE / 2 - offset.x) * ratio * (w / (img.width * fitted * ratio)) * (img.width * fitted * ratio / w);
+    const y = 200 - (SIZE / 2 - offset.y) * ratio * (h / (img.height * fitted * ratio)) * (img.height * fitted * ratio / h);
+    // simpler: just redraw at scale
+    const sc2 = Math.min(400 / img.width, 400 / img.height) * scale;
+    const w2 = img.width * sc2;
+    const h2 = img.height * sc2;
+    const ox = offset.x * (400 / SIZE);
+    const oy = offset.y * (400 / SIZE);
+    ctx.drawImage(img, 200 - w2 / 2 + ox, 200 - h2 / 2 + oy, w2, h2);
+    out.toBlob(blob => onConfirm(blob), 'image/jpeg', 0.92);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: C.parchment, borderRadius: 16, padding: 24, width: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <div className="text-[11px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>Crop Photo</div>
+        <canvas
+          ref={canvasRef}
+          width={SIZE} height={SIZE}
+          style={{ borderRadius: '50%', cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+          onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+        />
+        <div style={{ width: '100%' }}>
+          <div className="text-[9px] uppercase tracking-[0.15em] mb-1" style={{ color: C.inkMute }}>Zoom</div>
+          <input type="range" min="0.5" max="3" step="0.01" value={scale}
+            onChange={e => setScale(parseFloat(e.target.value))}
+            style={{ width: '100%', accentColor: C.clay }}
+          />
+        </div>
+        <div className="flex gap-3 w-full">
+          <button onClick={onCancel} className="flex-1 py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
+            style={{ border: `1px solid ${C.line}`, color: C.inkMute, background: 'transparent' }}>
+            Cancel
+          </button>
+          <button onClick={handleConfirm} className="flex-1 py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
+            style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer' }}>
+            Use Photo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut }) {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const [ustaRating, setUstaRating] = useState(me.ustaRating || '');
+  const [cropSrc, setCropSrc] = useState(null);
 
   const myCompleted = matches.filter(m => (m.a === me.id || m.b === me.id) && m.status === 'completed');
   const winRate = me.wins + me.losses === 0 ? 0 : Math.round((me.wins / (me.wins + me.losses)) * 100);
@@ -1695,40 +1821,38 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
     setShowPasswordChange(false);
   };
 
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setCropSrc(reader.result);
+    reader.readAsDataURL(file);
+    // reset input so same file can be selected again
+    e.target.value = '';
+  };
 
+  const handleCropConfirm = async (blob) => {
+    setCropSrc(null);
     try {
-      // Upload to Supabase Storage
-      const ext = file.name.split('.').pop();
-      const fileName = `${me.id}-${Date.now()}.${ext}`;
+      const fileName = `${me.id}-${Date.now()}.jpg`;
       const formData = new FormData();
-      formData.append('', file);
-
+      formData.append('', blob);
       const uploadRes = await fetch(
         `${SUPABASE_URL}/storage/v1/object/avatars/${fileName}`,
         {
           method: 'POST',
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-          },
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
           body: formData,
         }
       );
-
       if (!uploadRes.ok) throw new Error('Upload failed');
-
-      // Get public URL
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${fileName}`;
       onUpdateProfile({ profileImage: publicUrl });
     } catch (err) {
       console.error('Image upload error:', err);
-      // Fallback to base64
       const reader = new FileReader();
       reader.onloadend = () => onUpdateProfile({ profileImage: reader.result });
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(blob);
     }
   };
 
@@ -1739,6 +1863,8 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
 
   return (
     <div>
+    <>
+      {cropSrc && <ImageCropModal imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />}
       <SectionHeading kicker="Player card" title="Your Profile" />
 
       {/* Inactive Status Alert */}
@@ -2000,6 +2126,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
         Sign Out
       </button>
     </div>
+    </>
   );
 }
 
