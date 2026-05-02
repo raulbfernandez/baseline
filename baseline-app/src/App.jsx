@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import {
   ChevronUp, ChevronDown, Calendar, MapPin, X, Check,
   TrendingUp, Users, Swords, Activity, Target, Flame, Trophy, Plus, Minus, Search, Mail, Phone, User, Lock, Eye, EyeOff
@@ -1659,12 +1660,90 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
    PROFILE VIEW
    ============================================================ */
 
+function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
+  const [scale, setScale] = React.useState(1);
+  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = React.useState(false);
+  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
+  const SIZE = 260;
+
+  const getXY = (e) => {
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX, y: src.clientY };
+  };
+  const onDown = (e) => { e.preventDefault(); setDragging(true); setDragStart(getXY(e)); };
+  const onMove = (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const p = getXY(e);
+    setOffset(o => ({ x: o.x + p.x - dragStart.x, y: o.y + p.y - dragStart.y }));
+    setDragStart(p);
+  };
+  const onUp = () => setDragging(false);
+
+  const handleConfirm = () => {
+    const img = new window.Image();
+    img.onload = () => {
+      const out = document.createElement('canvas');
+      out.width = 400; out.height = 400;
+      const ctx = out.getContext('2d');
+      ctx.beginPath();
+      ctx.arc(200, 200, 200, 0, Math.PI * 2);
+      ctx.clip();
+      const ratio = 400 / SIZE;
+      const base = Math.min(SIZE / img.width, SIZE / img.height) * scale * ratio;
+      const w = img.width * base;
+      const h = img.height * base;
+      ctx.drawImage(img, 200 - w / 2 + offset.x * ratio, 200 - h / 2 + offset.y * ratio, w, h);
+      out.toBlob(blob => { if (blob) onConfirm(blob); else onCancel(); }, 'image/jpeg', 0.92);
+    };
+    img.onerror = onCancel;
+    img.src = imageSrc;
+  };
+
+  const modal = (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: C.parchment, borderRadius: 16, padding: 24, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <div className="text-[11px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>Crop Photo</div>
+        <div
+          style={{ width: SIZE, height: SIZE, borderRadius: '50%', overflow: 'hidden', background: '#000', cursor: dragging ? 'grabbing' : 'grab', flexShrink: 0, touchAction: 'none' }}
+          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+          onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+        >
+          <img
+            src={imageSrc} alt="crop" draggable={false}
+            style={{
+              width: SIZE, height: 'auto', maxWidth: 'none', pointerEvents: 'none', userSelect: 'none', display: 'block',
+              transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+              transformOrigin: 'center center',
+            }}
+          />
+        </div>
+        <div style={{ width: '100%' }}>
+          <div className="text-[9px] uppercase tracking-[0.15em] mb-1" style={{ color: C.inkMute }}>Zoom</div>
+          <input type="range" min="1" max="3" step="0.01" value={scale}
+            onChange={e => setScale(parseFloat(e.target.value))}
+            style={{ width: '100%', accentColor: C.clay }}
+          />
+        </div>
+        <div className="flex gap-3 w-full">
+          <button onClick={onCancel} style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${C.line}`, color: C.inkMute, background: 'transparent', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cancel</button>
+          <button onClick={handleConfirm} style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 8, background: C.clay, color: 'white', border: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Use Photo</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return ReactDOM.createPortal(modal, document.body);
+}
+
 function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut }) {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const [ustaRating, setUstaRating] = useState(me.ustaRating || '');
+  const [cropSrc, setCropSrc] = useState(null);
 
   const myCompleted = matches.filter(m => (m.a === me.id || m.b === me.id) && m.status === 'completed');
   const winRate = me.wins + me.losses === 0 ? 0 : Math.round((me.wins / (me.wins + me.losses)) * 100);
@@ -1696,14 +1775,20 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
     setShowPasswordChange(false);
   };
 
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => { if (ev.target && ev.target.result) setCropSrc(ev.target.result); };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropConfirm = async (blob) => {
+    setCropSrc(null);
     try {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      const ext = file.name.split('.').pop() || 'jpg';
-      const fileName = `${me.id}-${Date.now()}.${ext}`;
+      const fileName = `${me.id}-${Date.now()}.jpg`;
       const formData = new FormData();
-      formData.append('', file);
+      formData.append('', blob);
       const uploadRes = await fetch(
         `${SUPABASE_URL}/storage/v1/object/avatars/${fileName}`,
         { method: 'POST', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }, body: formData }
@@ -1711,12 +1796,9 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
       if (!uploadRes.ok) throw new Error('Upload failed');
       onUpdateProfile({ profileImage: `${SUPABASE_URL}/storage/v1/object/public/avatars/${fileName}` });
     } catch (err) {
-      console.error('Upload error:', err);
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => { if (ev.target && ev.target.result) onUpdateProfile({ profileImage: ev.target.result }); };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(blob);
     }
   };
 
@@ -1727,6 +1809,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
 
   return (
     <div>
+      {cropSrc && <ImageCropModal imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />}
       <SectionHeading kicker="Player card" title="Your Profile" />
 
       {/* Inactive Status Alert */}
