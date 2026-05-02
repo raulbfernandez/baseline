@@ -1828,8 +1828,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
   };
 
   return (
-    <>
-      <div>
+    <div>
       {cropSrc && <ImageCropModal imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />}
       <SectionHeading kicker="Player card" title="Your Profile" />
 
@@ -2092,7 +2091,6 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
         Sign Out
       </button>
     </div>
-    </>
   );
 }
 
