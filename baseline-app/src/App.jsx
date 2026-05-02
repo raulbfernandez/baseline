@@ -1078,7 +1078,7 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-4"
+      className="flex items-center gap-3 pr-4 pl-2 py-4"
       style={{
         background: isMe ? `${C.optic}30` : isHidden ? `${C.inkMute}10` : (podiumBg || 'transparent'),
         borderBottom: isLast ? 'none' : `1px solid ${C.parchmentDeep}`,
@@ -1089,10 +1089,10 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
         style={{
           fontFamily: '"Fraunces", serif',
           fontWeight: 900,
-          fontSize: rank <= 3 ? 24 : 20,
+          fontSize: 15,
           color: rankColor,
           fontVariantNumeric: 'tabular-nums',
-          width: 28,
+          width: 22,
           textAlign: 'right',
           lineHeight: 1,
         }}
@@ -1112,11 +1112,11 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
       </button>
       <div className="flex-1 min-w-0">
         {/* Name row */}
-        <div className="flex items-center gap-1 mb-0.5">
+        <div className="flex items-center gap-1 mb-0.5 min-w-0">
           <button
             onClick={onViewProfile}
-            className="font-bold"
-            style={{ fontSize: 15, color: C.ink, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: '"Fraunces", serif', wordBreak: 'break-word' }}
+            className="font-bold truncate"
+            style={{ fontSize: 15, color: C.ink, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: '"Fraunces", serif', minWidth: 0 }}
           >
             {player.name}{isMe && <span style={{ color: C.clay, fontWeight: 600 }}> · you</span>}
           </button>
@@ -1170,7 +1170,7 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
             <button
               onClick={onChallenge}
               className="text-[9px] uppercase tracking-[0.1em] font-bold px-2 py-1 rounded flex-shrink-0"
-              style={{ background: C.clay, color: 'white', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}
+              style={{ background: C.clay, color: 'white', whiteSpace: 'nowrap' }}
             >
               Challenge
             </button>
@@ -1365,44 +1365,38 @@ function MatchCard({ match, players, myId, onAccept, onDecline, onCancel, onRepo
 
   if (match.status === 'completed') {
     const won = match.winnerId === myId;
+    const ranked = rank(players);
+    const oppRank = ranked.findIndex(p => p.id === opponent?.id) + 1;
     return (
       <div
-        className="rounded-lg p-4"
+        className="rounded-lg px-4 py-3"
         style={{
           background: 'rgba(255,255,255,0.88)',
           border: `1px solid ${C.line}`,
-          borderLeft: `3px solid ${won ? C.win : C.loss}`,
+          borderLeft: `4px solid ${won ? C.win : C.loss}`,
         }}
       >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: won ? C.win : C.loss }}>
-              {won ? 'Win' : 'Loss'}
-            </span>
-            <span style={{ color: C.line }}>·</span>
+        {/* Top row: W/L + opponent + delete */}
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+            <span className="text-[14px] font-semibold truncate" style={{ fontFamily: '"Fraunces", serif', color: C.ink }}>{opponent?.name}</span>
+            <span className="text-[11px] flex-shrink-0" style={{ color: C.inkMute }}>#{oppRank}</span>
+          </div>
+          <button
+            onClick={() => onDelete()}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkMute, padding: '4px', flexShrink: 0 }}
+          >
+            <X size={13} />
+          </button>
+        </div>
+        {/* Bottom row: score + pts + date */}
+        <div className="flex items-center justify-between">
+          <span className="text-[12px]" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.inkMute }}>{match.score}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] font-bold" style={{ color: won ? C.win : C.loss }}>{won ? '+' : ''}{match.change} pts</span>
             <span className="text-[11px]" style={{ color: C.inkMute }}>{fmtDate(match.date)}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold" style={{ fontFamily: '"JetBrains Mono", monospace', color: won ? C.win : C.loss }}>
-              {won ? '+' : ''}{match.change}
-            </span>
-            <button
-              onClick={() => onDelete()}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkMute, padding: '10px 8px', lineHeight: 1 }}
-            >
-              <X size={13} />
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mb-2">
-          <Avatar name={opponent.name} size={40} />
-          <div className="flex-1">
-            <div className="font-semibold text-sm" style={{ color: C.ink }}>vs {opponent.name}</div>
-            <div className="text-[11px]" style={{ color: C.inkMute }}>{match.location}</div>
-          </div>
-        </div>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 14, fontWeight: 600, color: C.ink, letterSpacing: '0.05em' }}>
-          {match.score}
         </div>
       </div>
     );
@@ -1946,43 +1940,37 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
             {[...myCompleted].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((m, idx) => {
               const opponent = m.a === me.id ? find(players, m.b) : find(players, m.a);
               const won = m.winnerId === me.id;
+              const ranked = rank(players);
+              const oppRank = ranked.findIndex(p => p.id === opponent?.id) + 1;
               return (
                 <div
                   key={m.id}
-                  className="flex items-center gap-3 p-3 rounded"
-                  style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}` }}
+                  className="rounded-lg px-4 py-3"
+                  style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}`, borderLeft: `4px solid ${won ? C.win : C.loss}` }}
                 >
-                  <div
-                    className="w-8 h-8 flex-shrink-0 rounded flex items-center justify-center text-[11px] font-bold"
-                    style={{
-                      background: won ? C.optic : 'transparent',
-                      border: won ? 'none' : `1px solid ${C.clay}`,
-                      color: won ? C.clayDeep : C.clay,
-                    }}
-                  >
-                    {won ? 'W' : 'L'}
+                  {/* Top row: W/L + opponent + delete */}
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+                      <span className="text-[14px] font-semibold truncate" style={{ fontFamily: '"Fraunces", serif', color: C.ink }}>{opponent?.name || 'Unknown'}</span>
+                      <span className="text-[11px] flex-shrink-0" style={{ color: C.inkMute }}>#{oppRank}</span>
+                    </div>
+                    <button
+                      onClick={() => onDeleteMatch(m.id)}
+                      title="Delete match"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkMute, padding: '4px', flexShrink: 0 }}
+                    >
+                      <X size={13} />
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold truncate">{opponent?.name || 'Unknown'}</div>
-                    <div className="text-[11px]" style={{ color: C.inkMute, fontFamily: '"JetBrains Mono", monospace' }}>
-                      {m.score}
+                  {/* Bottom row: score + pts + date */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px]" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.inkMute }}>{m.score}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[12px] font-bold" style={{ color: won ? C.win : C.loss }}>{won ? '+' : ''}{m.change} pts</span>
+                      <span className="text-[11px]" style={{ color: C.inkMute }}>{fmtDate(m.date)}</span>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-[12px] font-semibold" style={{ fontFamily: '"JetBrains Mono", monospace', color: won ? C.win : C.loss }}>
-                      {won ? '+' : ''}{m.change} pts
-                    </div>
-                    <div className="text-[10px]" style={{ color: C.inkMute }}>
-                      {fmtDate(m.date)}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => onDeleteMatch(m.id)}
-                    title="Delete match"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkMute, padding: '10px 8px', flexShrink: 0 }}
-                  >
-                    <X size={14} />
-                  </button>
                 </div>
               );
             })}
@@ -2130,50 +2118,56 @@ function ActivityView({ matches, players, onViewProfile }) {
     .filter(m => m.status === 'completed')
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
+  const ranked = rank(players);
+  const getRank = (id) => ranked.findIndex(p => p.id === id) + 1;
+
   if (completed.length === 0) return (
     <div className="text-[12px] text-center py-4" style={{ color: C.inkMute }}>No matches played yet</div>
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {completed.map(m => {
         const winner = find(players, m.winnerId);
         const loserId = m.a === m.winnerId ? m.b : m.a;
         const loser = find(players, loserId);
         if (!winner || !loser) return null;
+        const wRank = getRank(winner.id);
+        const lRank = getRank(loser.id);
         return (
-          <div key={m.id} className="rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}` }}>
-            <div className="text-[10px] uppercase tracking-[0.2em] mb-3" style={{ color: C.inkMute }}>{fmtDate(m.date)}</div>
-            <div className="flex items-center justify-between gap-3">
+          <div key={m.id} className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}` }}>
+            {/* Date + score on one line */}
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] uppercase tracking-[0.2em]" style={{ color: C.inkMute }}>{fmtDate(m.date)}</span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink, background: C.parchmentWarm, whiteSpace: 'nowrap' }}>{m.score}</span>
+            </div>
+            {/* Players row */}
+            <div className="flex items-center justify-between gap-2">
               {/* Winner */}
-              <button onClick={() => onViewProfile(winner)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <button onClick={() => onViewProfile(winner)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                 {winner.profileImage
-                  ? <img src={winner.profileImage} alt={winner.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${C.win}` }} />
-                  : <Avatar name={winner.name} size={48} />
+                  ? <img src={winner.profileImage} alt={winner.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${C.win}` }} />
+                  : <Avatar name={winner.name} size={36} />
                 }
                 <div className="text-left min-w-0">
-                  <div className="font-semibold" style={{ fontSize: 13, fontFamily: '"Fraunces", serif', color: C.ink, wordBreak: 'break-word' }}>{winner.name}</div>
-                  <div className="text-[10px] uppercase tracking-[0.1em] font-bold" style={{ color: C.win }}>Won</div>
+                  <div className="font-semibold truncate" style={{ fontSize: 12, fontFamily: '"Fraunces", serif', color: C.ink }}>{winner.name}</div>
+                  <div style={{ fontSize: 10, color: C.win, fontWeight: 700 }}>#{wRank} · W</div>
                 </div>
               </button>
 
-              <div className="text-[12px] font-bold flex-shrink-0" style={{ color: C.line }}>vs</div>
+              <div className="text-[10px] font-bold flex-shrink-0" style={{ color: C.line }}>vs</div>
 
               {/* Loser */}
-              <button onClick={() => onViewProfile(loser)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+              <button onClick={() => onViewProfile(loser)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
                 <div className="text-right min-w-0">
-                  <div className="font-semibold" style={{ fontSize: 13, fontFamily: '"Fraunces", serif', color: C.ink, wordBreak: 'break-word' }}>{loser.name}</div>
-                  <div className="text-[10px] uppercase tracking-[0.1em] font-bold" style={{ color: C.loss }}>Lost</div>
+                  <div className="font-semibold truncate" style={{ fontSize: 12, fontFamily: '"Fraunces", serif', color: C.ink }}>{loser.name}</div>
+                  <div style={{ fontSize: 10, color: C.loss, fontWeight: 700 }}>#{lRank} · L</div>
                 </div>
                 {loser.profileImage
-                  ? <img src={loser.profileImage} alt={loser.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${C.loss}` }} />
-                  : <Avatar name={loser.name} size={48} />
+                  ? <img src={loser.profileImage} alt={loser.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${C.loss}` }} />
+                  : <Avatar name={loser.name} size={36} />
                 }
               </button>
-            </div>
-            {/* Score */}
-            <div className="text-center mt-3">
-              <span className="text-[11px] font-semibold px-3 py-1 rounded-full" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink, background: C.parchmentWarm, whiteSpace: 'nowrap' }}>{m.score}</span>
             </div>
           </div>
         );
@@ -2449,29 +2443,23 @@ function PlayerDetailModal({ player, players, matches, myId, onClose }) {
             <div className="text-[10px] uppercase tracking-[0.15em] font-semibold mb-2" style={{ color: C.inkMute }}>
               Match History
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1">
               {[...playerMatches].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(m => {
                 const won = m.winnerId === player.id;
                 const oppId = m.a === player.id ? m.b : m.a;
                 const opp = find(players, oppId);
+                const oppRank = rank(players).findIndex(p => p.id === oppId) + 1;
                 return (
-                  <div key={m.id} className="flex items-center gap-3 p-2 rounded" style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}` }}>
-                    <div
-                      className="w-7 h-7 flex-shrink-0 rounded flex items-center justify-center text-[10px] font-bold"
-                      style={{ background: won ? C.optic : 'transparent', border: won ? 'none' : `1px solid ${C.clay}`, color: won ? C.clayDeep : C.clay }}
-                    >
-                      {won ? 'W' : 'L'}
-                    </div>
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      {opp?.profileImage
-                        ? <img src={opp.profileImage} alt={opp.name} style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                        : <Avatar name={opp?.name || '?'} size={22} />
-                      }
+                  <div key={m.id} className="flex items-center gap-2 px-3 py-1 rounded" style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}`, borderLeft: `3px solid ${won ? C.win : C.loss}` }}>
+                    <span className="text-[10px] font-bold flex-shrink-0 w-3" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+                    <div className="flex-1 min-w-0">
                       <span className="text-[12px] font-semibold truncate" style={{ color: C.ink }}>{opp?.name || 'Unknown'}</span>
+                      <span className="text-[10px] ml-1" style={{ color: C.inkMute }}>#{oppRank}</span>
                     </div>
+                    <div className="text-[10px] flex-shrink-0" style={{ color: C.inkMute, fontFamily: '"JetBrains Mono", monospace' }}>{m.score}</div>
                     <div className="text-right flex-shrink-0">
-                      <div className="text-[11px]" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.inkMute }}>{m.score}</div>
-                      <div className="text-[10px]" style={{ color: C.inkMute }}>{fmtDate(m.date)}</div>
+                      <div className="text-[10px] font-bold" style={{ color: won ? C.win : C.loss }}>{won ? '+' : ''}{m.change}</div>
+                      <div className="text-[9px]" style={{ color: C.inkMute }}>{fmtDate(m.date)}</div>
                     </div>
                   </div>
                 );
