@@ -1848,8 +1848,6 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
     }
   };
 
-  };
-
   const handleSaveProfile = () => {
     onUpdateProfile({ ustaRating });
     setEditingProfile(false);
