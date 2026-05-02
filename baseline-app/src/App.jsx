@@ -1660,99 +1660,93 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
    ============================================================ */
 function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
   const canvasRef = React.useRef(null);
+  const imgRef = React.useRef(null);
   const [scale, setScale] = React.useState(1);
   const [offset, setOffset] = React.useState({ x: 0, y: 0 });
   const [dragging, setDragging] = React.useState(false);
-  const [dragStart, setDragStart] = React.useState(null);
-  const imgRef = React.useRef(null);
-  const SIZE = 280;
+  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
+  const [ready, setReady] = React.useState(false);
+  const SIZE = 260;
 
   React.useEffect(() => {
-    const img = new Image();
-    img.onload = () => {
-      imgRef.current = img;
-      drawCanvas(img, scale, offset);
-    };
+    const img = new window.Image();
+    img.onload = () => { imgRef.current = img; setReady(true); };
+    img.onerror = () => onCancel();
     img.src = imageSrc;
   }, [imageSrc]);
 
-  const drawCanvas = (img, sc, off) => {
+  React.useEffect(() => {
+    if (!ready) return;
+    draw();
+  }, [ready, scale, offset]);
+
+  const draw = () => {
     const canvas = canvasRef.current;
+    const img = imgRef.current;
     if (!canvas || !img) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, SIZE, SIZE);
-    const fitted = Math.min(SIZE / img.width, SIZE / img.height) * sc;
-    const w = img.width * fitted;
-    const h = img.height * fitted;
-    const x = SIZE / 2 - w / 2 + off.x;
-    const y = SIZE / 2 - h / 2 + off.y;
+    const base = Math.min(SIZE / img.width, SIZE / img.height);
+    const sc = base * scale;
+    const w = img.width * sc;
+    const h = img.height * sc;
+    const x = SIZE / 2 - w / 2 + offset.x;
+    const y = SIZE / 2 - h / 2 + offset.y;
     ctx.drawImage(img, x, y, w, h);
-    // dark overlay outside circle
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, 0, SIZE, SIZE);
     ctx.globalCompositeOperation = 'destination-out';
     ctx.beginPath();
-    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 4, 0, Math.PI * 2);
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    // circle border
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 4, 0, Math.PI * 2);
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 3, 0, Math.PI * 2);
     ctx.stroke();
   };
 
-  React.useEffect(() => {
-    if (imgRef.current) drawCanvas(imgRef.current, scale, offset);
-  }, [scale, offset]);
-
-  const getPos = (e) => {
+  const getXY = (e) => {
     const rect = canvasRef.current.getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
-    return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   };
 
-  const onDown = (e) => { e.preventDefault(); setDragging(true); setDragStart(getPos(e)); };
+  const onDown = (e) => { e.preventDefault(); setDragging(true); setDragStart(getXY(e)); };
   const onMove = (e) => {
     if (!dragging) return;
     e.preventDefault();
-    const pos = getPos(e);
-    setOffset(o => ({ x: o.x + pos.x - dragStart.x, y: o.y + pos.y - dragStart.y }));
-    setDragStart(pos);
+    const p = getXY(e);
+    setOffset(o => ({ x: o.x + p.x - dragStart.x, y: o.y + p.y - dragStart.y }));
+    setDragStart(p);
   };
   const onUp = () => setDragging(false);
 
   const handleConfirm = () => {
-    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!img) return;
     const out = document.createElement('canvas');
     out.width = 400; out.height = 400;
     const ctx = out.getContext('2d');
     ctx.beginPath();
     ctx.arc(200, 200, 200, 0, Math.PI * 2);
     ctx.clip();
-    // draw at 400x400 scale
-    const img = imgRef.current;
-    const fitted = Math.min(SIZE / img.width, SIZE / img.height) * scale;
     const ratio = 400 / SIZE;
-    const w = img.width * fitted * ratio;
-    const h = img.height * fitted * ratio;
-    const x = 200 - (SIZE / 2 - offset.x) * ratio * (w / (img.width * fitted * ratio)) * (img.width * fitted * ratio / w);
-    const y = 200 - (SIZE / 2 - offset.y) * ratio * (h / (img.height * fitted * ratio)) * (img.height * fitted * ratio / h);
-    // simpler: just redraw at scale
-    const sc2 = Math.min(400 / img.width, 400 / img.height) * scale;
-    const w2 = img.width * sc2;
-    const h2 = img.height * sc2;
-    const ox = offset.x * (400 / SIZE);
-    const oy = offset.y * (400 / SIZE);
-    ctx.drawImage(img, 200 - w2 / 2 + ox, 200 - h2 / 2 + oy, w2, h2);
-    out.toBlob(blob => onConfirm(blob), 'image/jpeg', 0.92);
+    const base = Math.min(SIZE / img.width, SIZE / img.height);
+    const sc = base * scale * ratio;
+    const w = img.width * sc;
+    const h = img.height * sc;
+    const x = 200 - w / 2 + offset.x * ratio;
+    const y = 200 - h / 2 + offset.y * ratio;
+    ctx.drawImage(img, x, y, w, h);
+    out.toBlob(blob => { if (blob) onConfirm(blob); }, 'image/jpeg', 0.92);
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: C.parchment, borderRadius: 16, padding: 24, width: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: C.parchment, borderRadius: 16, padding: 24, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
         <div className="text-[11px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>Crop Photo</div>
         <canvas
           ref={canvasRef}
@@ -1770,7 +1764,7 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
         </div>
         <div className="flex gap-3 w-full">
           <button onClick={onCancel} className="flex-1 py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
-            style={{ border: `1px solid ${C.line}`, color: C.inkMute, background: 'transparent' }}>
+            style={{ border: `1px solid ${C.line}`, color: C.inkMute, background: 'transparent', cursor: 'pointer' }}>
             Cancel
           </button>
           <button onClick={handleConfirm} className="flex-1 py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
@@ -1782,6 +1776,7 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
     </div>
   );
 }
+
 
 function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut }) {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
