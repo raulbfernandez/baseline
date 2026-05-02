@@ -1817,13 +1817,19 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
   };
 
   const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => setCropSrc(reader.result);
-    reader.readAsDataURL(file);
-    // reset input so same file can be selected again
-    e.target.value = '';
+    try {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (ev.target && ev.target.result) {
+          setCropSrc(ev.target.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Upload error:', err);
+    }
   };
 
   const handleCropConfirm = async (blob) => {
