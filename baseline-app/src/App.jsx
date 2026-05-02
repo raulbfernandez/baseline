@@ -1659,61 +1659,16 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
    PROFILE VIEW
    ============================================================ */
 function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
-  const canvasRef = React.useRef(null);
-  const imgRef = React.useRef(null);
   const [scale, setScale] = React.useState(1);
   const [offset, setOffset] = React.useState({ x: 0, y: 0 });
   const [dragging, setDragging] = React.useState(false);
   const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
-  const [ready, setReady] = React.useState(false);
   const SIZE = 260;
 
-  React.useEffect(() => {
-    const img = new window.Image();
-    img.onload = () => { imgRef.current = img; setReady(true); };
-    img.onerror = () => onCancel();
-    img.src = imageSrc;
-  }, [imageSrc]);
-
-  React.useEffect(() => {
-    if (!ready) return;
-    draw();
-  }, [ready, scale, offset]);
-
-  const draw = () => {
-    const canvas = canvasRef.current;
-    const img = imgRef.current;
-    if (!canvas || !img) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, SIZE, SIZE);
-    const base = Math.min(SIZE / img.width, SIZE / img.height);
-    const sc = base * scale;
-    const w = img.width * sc;
-    const h = img.height * sc;
-    const x = SIZE / 2 - w / 2 + offset.x;
-    const y = SIZE / 2 - h / 2 + offset.y;
-    ctx.drawImage(img, x, y, w, h);
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0, 0, SIZE, SIZE);
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.beginPath();
-    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 3, 0, Math.PI * 2);
-    ctx.stroke();
-  };
-
   const getXY = (e) => {
-    const rect = canvasRef.current.getBoundingClientRect();
     const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    return { x: src.clientX, y: src.clientY };
   };
-
   const onDown = (e) => { e.preventDefault(); setDragging(true); setDragStart(getXY(e)); };
   const onMove = (e) => {
     if (!dragging) return;
@@ -1725,39 +1680,56 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
   const onUp = () => setDragging(false);
 
   const handleConfirm = () => {
-    const img = imgRef.current;
-    if (!img) return;
-    const out = document.createElement('canvas');
-    out.width = 400; out.height = 400;
-    const ctx = out.getContext('2d');
-    ctx.beginPath();
-    ctx.arc(200, 200, 200, 0, Math.PI * 2);
-    ctx.clip();
-    const ratio = 400 / SIZE;
-    const base = Math.min(SIZE / img.width, SIZE / img.height);
-    const sc = base * scale * ratio;
-    const w = img.width * sc;
-    const h = img.height * sc;
-    const x = 200 - w / 2 + offset.x * ratio;
-    const y = 200 - h / 2 + offset.y * ratio;
-    ctx.drawImage(img, x, y, w, h);
-    out.toBlob(blob => { if (blob) onConfirm(blob); }, 'image/jpeg', 0.92);
+    try {
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const out = document.createElement('canvas');
+        out.width = 400; out.height = 400;
+        const ctx = out.getContext('2d');
+        ctx.beginPath();
+        ctx.arc(200, 200, 200, 0, Math.PI * 2);
+        ctx.clip();
+        const ratio = 400 / SIZE;
+        const base = Math.min(SIZE / img.width, SIZE / img.height) * scale * ratio;
+        const w = img.width * base;
+        const h = img.height * base;
+        ctx.drawImage(img, 200 - w / 2 + offset.x * ratio, 200 - h / 2 + offset.y * ratio, w, h);
+        out.toBlob(blob => { if (blob) onConfirm(blob); else onCancel(); }, 'image/jpeg', 0.92);
+      };
+      img.onerror = () => onCancel();
+      img.src = imageSrc;
+    } catch(err) { onCancel(); }
   };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ background: C.parchment, borderRadius: 16, padding: 24, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
         <div className="text-[11px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>Crop Photo</div>
-        <canvas
-          ref={canvasRef}
-          width={SIZE} height={SIZE}
-          style={{ borderRadius: '50%', cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+        <div
+          style={{ width: SIZE, height: SIZE, borderRadius: '50%', overflow: 'hidden', background: '#000', cursor: dragging ? 'grabbing' : 'grab', flexShrink: 0, touchAction: 'none', position: 'relative' }}
           onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
           onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
-        />
+        >
+          <img
+            src={imageSrc}
+            alt="crop"
+            draggable={false}
+            style={{
+              position: 'absolute',
+              left: '50%', top: '50%',
+              transform: `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+              maxWidth: 'none',
+              width: SIZE,
+              height: 'auto',
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          />
+        </div>
         <div style={{ width: '100%' }}>
           <div className="text-[9px] uppercase tracking-[0.15em] mb-1" style={{ color: C.inkMute }}>Zoom</div>
-          <input type="range" min="0.5" max="3" step="0.01" value={scale}
+          <input type="range" min="1" max="3" step="0.01" value={scale}
             onChange={e => setScale(parseFloat(e.target.value))}
             style={{ width: '100%', accentColor: C.clay }}
           />
