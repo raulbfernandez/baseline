@@ -1862,9 +1862,9 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
   };
 
   return (
-    <div>
     <>
       {cropSrc && <ImageCropModal imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />}
+      <div>
       <SectionHeading kicker="Player card" title="Your Profile" />
 
       {/* Inactive Status Alert */}
