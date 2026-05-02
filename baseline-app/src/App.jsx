@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import ReactDOM from 'react-dom';
 import {
   ChevronUp, ChevronDown, Calendar, MapPin, X, Check,
   TrendingUp, Users, Swords, Activity, Target, Flame, Trophy, Plus, Minus, Search, Mail, Phone, User, Lock, Eye, EyeOff
@@ -1662,24 +1661,27 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
 
 function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
   const [scale, setScale] = React.useState(1);
-  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = React.useState(false);
-  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
+  const [ox, setOx] = React.useState(0);
+  const [oy, setOy] = React.useState(0);
+  const dragRef = React.useRef(null);
   const SIZE = 260;
 
-  const getXY = (e) => {
-    const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX, y: src.clientY };
+  const onMouseDown = (e) => { dragRef.current = { x: e.clientX, y: e.clientY, ox, oy }; };
+  const onMouseMove = (e) => {
+    if (!dragRef.current) return;
+    setOx(dragRef.current.ox + e.clientX - dragRef.current.x);
+    setOy(dragRef.current.oy + e.clientY - dragRef.current.y);
   };
-  const onDown = (e) => { e.preventDefault(); setDragging(true); setDragStart(getXY(e)); };
-  const onMove = (e) => {
-    if (!dragging) return;
-    e.preventDefault();
-    const p = getXY(e);
-    setOffset(o => ({ x: o.x + p.x - dragStart.x, y: o.y + p.y - dragStart.y }));
-    setDragStart(p);
+  const onMouseUp = () => { dragRef.current = null; };
+
+  const onTouchStart = (e) => { const t = e.touches[0]; dragRef.current = { x: t.clientX, y: t.clientY, ox, oy }; };
+  const onTouchMove = (e) => {
+    if (!dragRef.current) return;
+    const t = e.touches[0];
+    setOx(dragRef.current.ox + t.clientX - dragRef.current.x);
+    setOy(dragRef.current.oy + t.clientY - dragRef.current.y);
   };
-  const onUp = () => setDragging(false);
+  const onTouchEnd = () => { dragRef.current = null; };
 
   const handleConfirm = () => {
     const img = new window.Image();
@@ -1687,55 +1689,40 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
       const out = document.createElement('canvas');
       out.width = 400; out.height = 400;
       const ctx = out.getContext('2d');
-      ctx.beginPath();
-      ctx.arc(200, 200, 200, 0, Math.PI * 2);
-      ctx.clip();
-      const ratio = 400 / SIZE;
-      const base = Math.min(SIZE / img.width, SIZE / img.height) * scale * ratio;
-      const w = img.width * base;
-      const h = img.height * base;
-      ctx.drawImage(img, 200 - w / 2 + offset.x * ratio, 200 - h / 2 + offset.y * ratio, w, h);
-      out.toBlob(blob => { if (blob) onConfirm(blob); else onCancel(); }, 'image/jpeg', 0.92);
+      ctx.beginPath(); ctx.arc(200, 200, 200, 0, Math.PI * 2); ctx.clip();
+      const r = 400 / SIZE;
+      const base = Math.min(SIZE / img.width, SIZE / img.height) * scale * r;
+      ctx.drawImage(img, 200 - img.width * base / 2 + ox * r, 200 - img.height * base / 2 + oy * r, img.width * base, img.height * base);
+      out.toBlob(b => b ? onConfirm(b) : onCancel(), 'image/jpeg', 0.9);
     };
     img.onerror = onCancel;
     img.src = imageSrc;
   };
 
-  const modal = (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ background: C.parchment, borderRadius: 16, padding: 24, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <div className="text-[11px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>Crop Photo</div>
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: C.parchment, borderRadius: 16, padding: 20, width: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.2em', fontWeight: 700, color: C.inkMute }}>Crop Photo</div>
         <div
-          style={{ width: SIZE, height: SIZE, borderRadius: '50%', overflow: 'hidden', background: '#000', cursor: dragging ? 'grabbing' : 'grab', flexShrink: 0, touchAction: 'none' }}
-          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-          onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+          style={{ width: SIZE, height: SIZE, borderRadius: '50%', overflow: 'hidden', background: '#111', cursor: 'grab', userSelect: 'none', touchAction: 'none' }}
+          onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
         >
-          <img
-            src={imageSrc} alt="crop" draggable={false}
-            style={{
-              width: SIZE, height: 'auto', maxWidth: 'none', pointerEvents: 'none', userSelect: 'none', display: 'block',
-              transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-              transformOrigin: 'center center',
-            }}
-          />
+          <img src={imageSrc} alt="" draggable={false} style={{ width: SIZE, height: 'auto', display: 'block', transform: `translate(${ox}px, ${oy}px) scale(${scale})`, transformOrigin: 'center', pointerEvents: 'none' }} />
         </div>
         <div style={{ width: '100%' }}>
-          <div className="text-[9px] uppercase tracking-[0.15em] mb-1" style={{ color: C.inkMute }}>Zoom</div>
-          <input type="range" min="1" max="3" step="0.01" value={scale}
-            onChange={e => setScale(parseFloat(e.target.value))}
-            style={{ width: '100%', accentColor: C.clay }}
-          />
+          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.15em', color: C.inkMute, marginBottom: 4 }}>Zoom</div>
+          <input type="range" min="1" max="3" step="0.01" value={scale} onChange={e => setScale(+e.target.value)} style={{ width: '100%', accentColor: C.clay }} />
         </div>
-        <div className="flex gap-3 w-full">
-          <button onClick={onCancel} style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${C.line}`, color: C.inkMute, background: 'transparent', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cancel</button>
-          <button onClick={handleConfirm} style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 8, background: C.clay, color: 'white', border: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Use Photo</button>
+        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${C.line}`, color: C.inkMute, background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={handleConfirm} style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 8, background: C.clay, color: 'white', border: 'none', cursor: 'pointer' }}>Use Photo</button>
         </div>
       </div>
     </div>
   );
-
-  return ReactDOM.createPortal(modal, document.body);
 }
+
 
 function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut }) {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
