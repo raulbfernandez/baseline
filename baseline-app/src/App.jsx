@@ -1784,7 +1784,6 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
   const [confirmPassword, setConfirmPassword] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const [ustaRating, setUstaRating] = useState(me.ustaRating || '');
-  const [cropSrc, setCropSrc] = useState(null);
 
   const myCompleted = matches.filter(m => (m.a === me.id || m.b === me.id) && m.status === 'completed');
   const winRate = me.wins + me.losses === 0 ? 0 : Math.round((me.wins / (me.wins + me.losses)) * 100);
@@ -1816,28 +1815,14 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
     setShowPasswordChange(false);
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     try {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (ev.target && ev.target.result) {
-          setCropSrc(ev.target.result);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error('Upload error:', err);
-    }
-  };
-
-  const handleCropConfirm = async (blob) => {
-    setCropSrc(null);
-    try {
-      const fileName = `${me.id}-${Date.now()}.jpg`;
+      const ext = file.name.split('.').pop() || 'jpg';
+      const fileName = `${me.id}-${Date.now()}.${ext}`;
       const formData = new FormData();
-      formData.append('', blob);
+      formData.append('', file);
       const uploadRes = await fetch(
         `${SUPABASE_URL}/storage/v1/object/avatars/${fileName}`,
         {
@@ -1850,11 +1835,19 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${fileName}`;
       onUpdateProfile({ profileImage: publicUrl });
     } catch (err) {
-      console.error('Image upload error:', err);
-      const reader = new FileReader();
-      reader.onloadend = () => onUpdateProfile({ profileImage: reader.result });
-      reader.readAsDataURL(blob);
+      console.error('Upload error:', err);
+      try {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => { if (ev.target && ev.target.result) onUpdateProfile({ profileImage: ev.target.result }); };
+        reader.readAsDataURL(file);
+      } catch (err2) {
+        console.error('Fallback error:', err2);
+      }
     }
+  };
+
   };
 
   const handleSaveProfile = () => {
@@ -1864,7 +1857,6 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
 
   return (
     <>
-      {cropSrc && <ImageCropModal imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />}
       <div>
       <SectionHeading kicker="Player card" title="Your Profile" />
 
