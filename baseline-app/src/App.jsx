@@ -1664,6 +1664,7 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
   const [ox, setOx] = React.useState(0);
   const [oy, setOy] = React.useState(0);
   const dragRef = React.useRef(null);
+  const imgRef = React.useRef(null);
   const SIZE = 260;
 
   const onMouseDown = (e) => { dragRef.current = { x: e.clientX, y: e.clientY, ox, oy }; };
@@ -1682,21 +1683,6 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
   };
   const onTouchEnd = () => { dragRef.current = null; };
 
-  // fitted width/height of the image inside the SIZE circle at scale=1
-  const imgRef = React.useRef(null);
-  const [naturalW, setNaturalW] = React.useState(1);
-  const [naturalH, setNaturalH] = React.useState(1);
-
-  const fittedW = React.useMemo(() => {
-    const base = Math.min(SIZE / naturalW, SIZE / naturalH);
-    return naturalW * base * scale;
-  }, [naturalW, naturalH, scale]);
-
-  const fittedH = React.useMemo(() => {
-    const base = Math.min(SIZE / naturalW, SIZE / naturalH);
-    return naturalH * base * scale;
-  }, [naturalW, naturalH, scale]);
-
   const handleConfirm = () => {
     const img = imgRef.current;
     if (!img) return;
@@ -1704,15 +1690,11 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
     out.width = 400; out.height = 400;
     const ctx = out.getContext('2d');
     ctx.beginPath(); ctx.arc(200, 200, 200, 0, Math.PI * 2); ctx.clip();
-    // ratio between output canvas (400) and preview (SIZE)
     const r = 400 / SIZE;
     const base = Math.min(SIZE / img.naturalWidth, SIZE / img.naturalHeight) * scale;
     const w = img.naturalWidth * base * r;
     const h = img.naturalHeight * base * r;
-    // center of preview is SIZE/2, SIZE/2; center of output is 200,200
-    const x = 200 - w / 2 + ox * r;
-    const y = 200 - h / 2 + oy * r;
-    ctx.drawImage(img, x, y, w, h);
+    ctx.drawImage(img, 200 - w / 2 + ox * r, 200 - h / 2 + oy * r, w, h);
     out.toBlob(b => b ? onConfirm(b) : onCancel(), 'image/jpeg', 0.9);
   };
 
@@ -1721,20 +1703,21 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
       <div style={{ background: C.parchment, borderRadius: 16, padding: 20, width: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.2em', fontWeight: 700, color: C.inkMute }}>Crop Photo</div>
         <div
-          style={{ width: SIZE, height: SIZE, borderRadius: '50%', overflow: 'hidden', background: '#111', cursor: 'grab', userSelect: 'none', touchAction: 'none', position: 'relative' }}
+          style={{ width: SIZE, height: SIZE, borderRadius: '50%', overflow: 'hidden', background: '#111', cursor: 'grab', userSelect: 'none', touchAction: 'none', position: 'relative', flexShrink: 0 }}
           onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
         >
           <img
             ref={imgRef}
             src={imageSrc} alt="" draggable={false}
-            onLoad={(e) => { setNaturalW(e.target.naturalWidth); setNaturalH(e.target.naturalHeight); }}
             style={{
               position: 'absolute',
-              width: fittedW,
+              width: '100%',
               height: 'auto',
-              left: SIZE / 2 - fittedW / 2 + ox,
-              top: SIZE / 2 - fittedH / 2 + oy,
+              top: '50%',
+              left: '50%',
+              transform: `translate(-50%, -50%) translate(${ox}px, ${oy}px) scale(${scale})`,
+              transformOrigin: 'center center',
               pointerEvents: 'none',
               userSelect: 'none',
             }}
