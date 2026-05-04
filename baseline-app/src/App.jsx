@@ -47,7 +47,7 @@ const C = {
 
 const SUPABASE_URL = 'https://oyqryjmlwdhcvvktkfub.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_VQQ3MVMlFaGjYbNqxIJ-Og_JVZNOtSK';
-const RESEND_KEY = 're_KH3naAuS_MyQyYZUH8Ls9aXdTjnhenzTt';
+const RESEND_KEY = '';
 
 const sendEmail = async ({ to, subject, html }) => {
   if (!to) return;
