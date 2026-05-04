@@ -1669,10 +1669,11 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
   const imgRef = React.useRef(null);
   const SIZE = 260;
 
-  // fit image to FILL the circle (like object-fit: cover)
+  // base scale to cover the circle (object-fit: cover)
   const baseScale = natW && natH ? Math.max(SIZE / natW, SIZE / natH) : 1;
-  const dispW = natW * baseScale * scale;
-  const dispH = natH * baseScale * scale;
+  // rendered size at scale=1
+  const baseW = natW * baseScale;
+  const baseH = natH * baseScale;
 
   const onMouseDown = (e) => { dragRef.current = { x: e.clientX, y: e.clientY, ox, oy }; };
   const onMouseMove = (e) => {
@@ -1698,8 +1699,8 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
     const ctx = out.getContext('2d');
     ctx.beginPath(); ctx.arc(200, 200, 200, 0, Math.PI * 2); ctx.clip();
     const r = 400 / SIZE;
-    const w = dispW * r;
-    const h = dispH * r;
+    const w = baseW * scale * r;
+    const h = baseH * scale * r;
     ctx.drawImage(img, 200 - w / 2 + ox * r, 200 - h / 2 + oy * r, w, h);
     out.toBlob(b => b ? onConfirm(b) : onCancel(), 'image/jpeg', 0.9);
   };
@@ -1719,10 +1720,12 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
             onLoad={(e) => { setNatW(e.target.naturalWidth); setNatH(e.target.naturalHeight); }}
             style={{
               position: 'absolute',
-              width: dispW,
-              height: 'auto',
-              left: SIZE / 2 - dispW / 2 + ox,
-              top: SIZE / 2 - dispH / 2 + oy,
+              width: baseW,
+              height: baseH,
+              left: SIZE / 2 - baseW / 2,
+              top: SIZE / 2 - baseH / 2,
+              transform: `translate(${ox}px, ${oy}px) scale(${scale})`,
+              transformOrigin: 'center center',
               pointerEvents: 'none',
               userSelect: 'none',
             }}
