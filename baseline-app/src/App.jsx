@@ -1663,9 +1663,16 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
   const [scale, setScale] = React.useState(1);
   const [ox, setOx] = React.useState(0);
   const [oy, setOy] = React.useState(0);
+  const [natW, setNatW] = React.useState(0);
+  const [natH, setNatH] = React.useState(0);
   const dragRef = React.useRef(null);
   const imgRef = React.useRef(null);
   const SIZE = 260;
+
+  // fit image to FILL the circle (like object-fit: cover)
+  const baseScale = natW && natH ? Math.max(SIZE / natW, SIZE / natH) : 1;
+  const dispW = natW * baseScale * scale;
+  const dispH = natH * baseScale * scale;
 
   const onMouseDown = (e) => { dragRef.current = { x: e.clientX, y: e.clientY, ox, oy }; };
   const onMouseMove = (e) => {
@@ -1685,15 +1692,14 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
 
   const handleConfirm = () => {
     const img = imgRef.current;
-    if (!img) return;
+    if (!img || !natW || !natH) return;
     const out = document.createElement('canvas');
     out.width = 400; out.height = 400;
     const ctx = out.getContext('2d');
     ctx.beginPath(); ctx.arc(200, 200, 200, 0, Math.PI * 2); ctx.clip();
     const r = 400 / SIZE;
-    const base = Math.min(SIZE / img.naturalWidth, SIZE / img.naturalHeight) * scale;
-    const w = img.naturalWidth * base * r;
-    const h = img.naturalHeight * base * r;
+    const w = dispW * r;
+    const h = dispH * r;
     ctx.drawImage(img, 200 - w / 2 + ox * r, 200 - h / 2 + oy * r, w, h);
     out.toBlob(b => b ? onConfirm(b) : onCancel(), 'image/jpeg', 0.9);
   };
@@ -1710,14 +1716,12 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
           <img
             ref={imgRef}
             src={imageSrc} alt="" draggable={false}
+            onLoad={(e) => { setNatW(e.target.naturalWidth); setNatH(e.target.naturalHeight); }}
             style={{
               position: 'absolute',
-              width: '100%',
-              height: 'auto',
-              top: '50%',
-              left: '50%',
-              transform: `translate(-50%, -50%) translate(${ox}px, ${oy}px) scale(${scale})`,
-              transformOrigin: 'center center',
+              width: dispW, height: dispH,
+              left: SIZE / 2 - dispW / 2 + ox,
+              top: SIZE / 2 - dispH / 2 + oy,
               pointerEvents: 'none',
               userSelect: 'none',
             }}
