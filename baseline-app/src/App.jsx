@@ -52,18 +52,10 @@ const RESEND_KEY = 're_KH3naAuS_MyQyYZUH8Ls9aXdTjnhenzTt';
 const sendEmail = async ({ to, subject, html }) => {
   if (!to) return;
   try {
-    await fetch('https://api.resend.com/emails', {
+    await fetch('/api/send-email', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'Baseline Tennis <onboarding@resend.dev>',
-        to,
-        subject,
-        html,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html }),
     });
   } catch (e) {
     console.error('Email send error:', e);
