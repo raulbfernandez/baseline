@@ -47,6 +47,28 @@ const C = {
 
 const SUPABASE_URL = 'https://oyqryjmlwdhcvvktkfub.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_VQQ3MVMlFaGjYbNqxIJ-Og_JVZNOtSK';
+const RESEND_KEY = 're_KH3naAuS_MyQyYZUH8Ls9aXdTjnhenzTt';
+
+const sendEmail = async ({ to, subject, html }) => {
+  if (!to) return;
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Baseline Tennis <onboarding@resend.dev>',
+        to,
+        subject,
+        html,
+      }),
+    });
+  } catch (e) {
+    console.error('Email send error:', e);
+  }
+};
 const DEFAULT_PASSWORD = 'tennis123';
 
 const sb = {
@@ -682,7 +704,30 @@ export default function App() {
     };
     setMatches(prev => [newMatch, ...prev]);
     await syncMatch(newMatch);
-    showToast(`Challenge sent to ${find(players, opponentId).name}`);
+
+    // Email the opponent
+    const challenger = find(players, currentUserId);
+    const opponent = find(players, opponentId);
+    if (opponent?.email) {
+      await sendEmail({
+        to: opponent.email,
+        subject: `🎾 You've been challenged on Baseline!`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="color: #C4522A;">You've been challenged!</h2>
+            <p><strong>${challenger?.name || 'A player'}</strong> has challenged you to a match on <strong>Baseline Tennis</strong>.</p>
+            <table style="margin: 16px 0; border-collapse: collapse;">
+              <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📅 Date</td><td><strong>${date}</strong></td></tr>
+              <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📍 Location</td><td><strong>${location}</strong></td></tr>
+            </table>
+            <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #C4522A;">Baseline</a> to view the challenge.</p>
+            <p style="color: #7A6548; font-size: 13px;">— The Baseline Team</p>
+          </div>
+        `,
+      });
+    }
+
+    showToast(`Challenge sent to ${opponent?.name}`);
   };
 
   const acceptMatch = async (matchId) => {
@@ -771,6 +816,32 @@ export default function App() {
     const updatedLoser = newPlayers.find(p => p.id === loserId);
     if (updatedWinner) await syncPlayer(updatedWinner);
     if (updatedLoser) await syncPlayer(updatedLoser);
+
+    // Email both players
+    const winner = find(players, winnerId);
+    const loser = find(players, loserId);
+    const emailBoth = async (recipient, isWinner) => {
+      if (!recipient?.email) return;
+      await sendEmail({
+        to: recipient.email,
+        subject: isWinner ? `🎾 Match result: You won!` : `🎾 Match result recorded`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="color: #C4522A;">${isWinner ? '🏆 You won!' : 'Match result recorded'}</h2>
+            <p>A match result has been submitted on <strong>Baseline Tennis</strong>.</p>
+            <table style="margin: 16px 0; border-collapse: collapse;">
+              <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">🏆 Winner</td><td><strong>${winner?.name}</strong></td></tr>
+              <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📊 Score</td><td><strong>${scoreStr}</strong></td></tr>
+              <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">✨ Points</td><td><strong>${isWinner ? `+${winnerPoints}` : `+${loserPoints}`} pts</strong></td></tr>
+            </table>
+            <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #C4522A;">Baseline</a> to view the updated ladder.</p>
+            <p style="color: #7A6548; font-size: 13px;">— The Baseline Team</p>
+          </div>
+        `,
+      });
+    };
+    await emailBoth(winner, true);
+    await emailBoth(loser, false);
 
     showToast(winnerId === currentUserId ? `Won! +${winnerPoints} pts` : loserId === currentUserId ? `+${loserPoints} pts earned` : 'Score saved');
   };
