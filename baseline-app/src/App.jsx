@@ -1719,7 +1719,8 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
             onLoad={(e) => { setNatW(e.target.naturalWidth); setNatH(e.target.naturalHeight); }}
             style={{
               position: 'absolute',
-              width: dispW, height: dispH,
+              width: dispW,
+              height: 'auto',
               left: SIZE / 2 - dispW / 2 + ox,
               top: SIZE / 2 - dispH / 2 + oy,
               pointerEvents: 'none',
