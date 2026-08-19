@@ -703,17 +703,17 @@ export default function App() {
     if (opponent?.email) {
       await sendEmail({
         to: opponent.email,
-        subject: `🎾 You've been challenged on Baseline!`,
+        subject: `🎾 You've been challenged on Los Feliz Tennis Club!`,
         html: `
           <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
             <h2 style="color: #C4522A;">You've been challenged!</h2>
-            <p><strong>${challenger?.name || 'A player'}</strong> has challenged you to a match on <strong>Baseline Tennis</strong>.</p>
+            <p><strong>${challenger?.name || 'A player'}</strong> has challenged you to a match on <strong>Los Feliz Tennis Club</strong>.</p>
             <table style="margin: 16px 0; border-collapse: collapse;">
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📅 Date</td><td><strong>${date}</strong></td></tr>
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📍 Location</td><td><strong>${location}</strong></td></tr>
             </table>
             <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #C4522A;">Baseline</a> to view your challenge.</p>
-            <p style="color: #7A6548; font-size: 13px;">— The Baseline Team</p>
+            <p style="color: #7A6548; font-size: 13px;">— The Los Feliz Tennis Club Team</p>
           </div>
         `,
       });
@@ -820,14 +820,14 @@ export default function App() {
         html: `
           <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
             <h2 style="color: #C4522A;">${isWinner ? '🏆 You won!' : 'Match result recorded'}</h2>
-            <p>A match result has been submitted on <strong>Baseline Tennis</strong>.</p>
+            <p>A match result has been submitted on <strong>Los Feliz Tennis Club</strong>.</p>
             <table style="margin: 16px 0; border-collapse: collapse;">
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">🏆 Winner</td><td><strong>${winner?.name}</strong></td></tr>
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📊 Score</td><td><strong>${scoreStr}</strong></td></tr>
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">✨ Points</td><td><strong>${isWinner ? `+${winnerPoints}` : `+${loserPoints}`} pts</strong></td></tr>
             </table>
             <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #C4522A;">Baseline</a> to view the updated ladder.</p>
-            <p style="color: #7A6548; font-size: 13px;">— The Baseline Team</p>
+            <p style="color: #7A6548; font-size: 13px;">— The Los Feliz Tennis Club Team</p>
           </div>
         `,
       });
