@@ -712,7 +712,7 @@ export default function App() {
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📅 Date</td><td><strong>${date}</strong></td></tr>
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📍 Location</td><td><strong>${location}</strong></td></tr>
             </table>
-            <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #C4522A;">Baseline</a> to view the challenge.</p>
+            <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #C4522A;">Baseline</a> to view your challenge.</p>
             <p style="color: #7A6548; font-size: 13px;">— The Baseline Team</p>
           </div>
         `,
