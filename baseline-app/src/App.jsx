@@ -1908,7 +1908,6 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
           <line x1="0" y1="70%" x2="100%" y2="70%" stroke="white" strokeWidth="1.5"/>
           <line x1="50%" y1="0" x2="50%" y2="70%" stroke="white" strokeWidth="1.5"/>
         </svg>
-        <div className="absolute right-0 top-0 bottom-0 opacity-15" style={{ width: 120, background: `radial-gradient(circle at center, ${C.optic} 0%, transparent 70%)` }} />
 
         {/* Photo + name */}
         <div className="flex items-start gap-4 mb-4 relative">
