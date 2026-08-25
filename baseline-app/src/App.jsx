@@ -245,7 +245,11 @@ const seedMatches = () => ([
   {id:'m71',a:'p27',b:'p19',status:'completed',winnerId:'p27',score:'6-4,6-0',sets:[{a:6,b:4},{a:6,b:0}],date:'2025-12-11',change:4},
 ]);
 
-const VENUES = ['Vermont Canyon', 'Griffith Park / Riverside', "Artin's of Glendale", 'Griffith Park Carousel', 'Other'];
+const VENUES = ['Vermont Canyon', 'Riverside', "Artin's of Glendale", 'Griffith Park Carousel', 'Other'];
+const VENUE_BOOKING = {
+  'Vermont Canyon': 'https://recreation.parks.lacity.gov/sports/tennis/facility/vermont-canyon',
+  'Riverside': 'https://recreation.parks.lacity.gov/sports/tennis/facility/riverside',
+};
 
 /* ============================================================
    HELPERS
@@ -543,12 +547,15 @@ export default function App() {
   const syncPlayer = async (player) => {
     try {
       const db = await sb.from('players');
-      await db.upsert({
+      const payload = {
         id: player.id, name: player.name, email: player.email, phone: player.phone,
         gender: player.gender, points: player.points, wins: player.wins, losses: player.losses,
-        streak: player.streak, usta_rating: player.ustaRating || null,
-        profile_image: player.profileImage || null, is_active: player.isActive !== false,
-      });
+        streak: player.streak, is_active: player.isActive !== false,
+      };
+      // Only include usta_rating and profile_image if explicitly set
+      if (player.ustaRating !== undefined) payload.usta_rating = player.ustaRating || null;
+      if (player.profileImage !== undefined) payload.profile_image = player.profileImage || null;
+      await db.upsert(payload);
     } catch (e) { console.error('Sync player error:', e); }
   };
 
@@ -2680,6 +2687,17 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
               className="w-full px-3 py-2.5 rounded text-sm mt-2"
               style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }}
             />
+          )}
+          {VENUE_BOOKING[location] && (
+            <a
+              href={VENUE_BOOKING[location]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block mt-2 text-center text-[11px] font-semibold uppercase tracking-[0.1em] py-1.5 rounded"
+              style={{ color: C.clay, border: `1px solid ${C.clay}`, textDecoration: 'none' }}
+            >
+              📅 Book a court
+            </a>
           )}
         </div>
       </div>
