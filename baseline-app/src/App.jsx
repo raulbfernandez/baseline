@@ -254,7 +254,7 @@ const VENUES = ['Vermont Canyon', 'Griffith Park / Riverside', "Artin's of Glend
  * Calculate points earned by each player in a match.
  * Rules:
  *  - Everyone gets 1 point for playing
- *  - 1 point per set won
+ *  - 2 points for winning the match
  *  - 1 bonus point for winning in straight sets (2 sets, no 3rd)
  *
  * sets: array of { a: number, b: number } (scores for player A and B)
@@ -266,11 +266,9 @@ const calcPoints = (sets, winnerSide) => {
   let aPoints = 1; // participation
   let bPoints = 1;
 
-  // Points per set won
-  for (const s of validSets) {
-    if (s.a > s.b) aPoints++;
-    else bPoints++;
-  }
+  // +2 for winning the match
+  if (winnerSide === 'a') aPoints += 2;
+  else bPoints += 2;
 
   // Straight sets bonus (winner won in exactly 2 sets)
   if (validSets.length === 2) {
@@ -1111,7 +1109,7 @@ function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleAct
 
       <div className="mt-4 text-[11px] leading-relaxed" style={{ color: C.inkMute }}>
         <span style={{ color: C.clay, fontWeight: 600 }}>How it works.</span> Challenge anyone on the ladder.
-        Everyone earns <strong>1 pt</strong> for playing, <strong>1 pt per set won</strong>, and a
+        Everyone earns <strong>1 pt</strong> for playing, <strong>2 pts for winning</strong>, and a
         <strong> bonus pt</strong> for winning in straight sets. Rankings are decided by total points accumulated.
       </div>
     </div>
