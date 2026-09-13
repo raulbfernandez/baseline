@@ -347,8 +347,10 @@ const calcStats = (playerId, matches, players) => {
    LOGIN SCREEN
    ============================================================ */
 function RequestToJoinScreen({ onBack }) {
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
   const [usta, setUsta] = useState('');
   const [note, setNote] = useState('');
@@ -357,21 +359,23 @@ function RequestToJoinScreen({ onBack }) {
   const [error, setError] = useState('');
 
   const handleSubmit = async () => {
-    if (!name.trim() || !email.trim() || !neighborhood) {
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !neighborhood) {
       setError('Please fill in your name, email, and neighborhood.');
       return;
     }
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
     setLoading(true);
     try {
       await sendEmail({
         to: 'raulbfernandez@gmail.com',
-        subject: `🎾 New Join Request: ${name}`,
+        subject: `🎾 New Join Request: ${fullName}`,
         html: `
           <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
             <h2 style="color: #C4522A;">New Join Request</h2>
             <table style="margin: 16px 0; border-collapse: collapse; width: 100%;">
-              <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Name</td><td>${name}</td></tr>
+              <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Name</td><td>${fullName}</td></tr>
               <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Email</td><td>${email}</td></tr>
+              <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Phone</td><td>${phone || 'Not provided'}</td></tr>
               <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Neighborhood</td><td>${neighborhood}</td></tr>
               <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">USTA Rating</td><td>${usta || 'Not provided'}</td></tr>
               <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Note</td><td>${note || 'None'}</td></tr>
@@ -421,9 +425,22 @@ function RequestToJoinScreen({ onBack }) {
               <div className="text-[12px] mb-5" style={{ color: C.inkMute }}>East side LA tennis community</div>
 
               <div className="space-y-3 mb-4">
-                {[
-                  { label: 'Full Name *', value: name, set: setName, placeholder: 'Your name', type: 'text' },
+                <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>First Name *</label>
+                  <input type="text" value={firstName} onChange={e => { setFirstName(e.target.value); setError(''); }} placeholder="First"
+                    style={{ width: '100%', padding: '11px 14px', border: `1.5px solid ${C.line}`, borderRadius: 8, fontSize: 15, fontFamily: 'inherit', background: C.parchmentWarm, color: C.ink, boxSizing: 'border-box' }} />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Last Name *</label>
+                  <input type="text" value={lastName} onChange={e => { setLastName(e.target.value); setError(''); }} placeholder="Last"
+                    style={{ width: '100%', padding: '11px 14px', border: `1.5px solid ${C.line}`, borderRadius: 8, fontSize: 15, fontFamily: 'inherit', background: C.parchmentWarm, color: C.ink, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+
+              {[
                   { label: 'Email *', value: email, set: setEmail, placeholder: 'your@email.com', type: 'email' },
+                  { label: 'Phone', value: phone, set: setPhone, placeholder: '(323) 555-1234', type: 'tel' },
                   { label: 'USTA Rating', value: usta, set: setUsta, placeholder: 'e.g. 3.5', type: 'text' },
                 ].map(({ label, value, set, placeholder, type }) => (
                   <div key={label}>
