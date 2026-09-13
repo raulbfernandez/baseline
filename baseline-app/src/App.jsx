@@ -615,6 +615,7 @@ export default function App() {
   const [tab, setTab] = useState('ladder');
   const [players, setPlayers] = useState(seedPlayers);
   const [matches, setMatches] = useState(seedMatches);
+  const [hitPosts, setHitPosts] = useState([]);
   const [passwords, setPasswords] = useState({});
   const [deletedMatchIds, setDeletedMatchIds] = useState(new Set());
   const [loaded, setLoaded] = useState(false);
@@ -697,6 +698,19 @@ export default function App() {
           dbPasswords.forEach(row => { pwMap[row.player_id] = row.password_hash; });
           setPasswords(pwMap);
         }
+
+        // Load hit posts
+        try {
+          const hdb = await sb.from('hit_posts');
+          const posts = await hdb.select();
+          if (Array.isArray(posts)) {
+            setHitPosts(posts.map(p => ({
+              id: p.id, posterId: p.poster_id, date: p.date, timeRange: p.time_range,
+              location: p.location, skillLevel: p.skill_level, note: p.note,
+              claimedBy: p.claimed_by, createdAt: p.created_at,
+            })).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+          }
+        } catch (e) { console.error('Load hit posts error:', e); }
       } catch (e) { console.error('Load error:', e); }
       setLoaded(true);
     })();
@@ -738,6 +752,66 @@ export default function App() {
       const db = await sb.from('matches');
       await db.delete({ id: matchId });
     } catch (e) { console.error('Delete match error:', e); }
+  };
+
+  const postHit = async ({ date, timeRange, location, skillLevel, note }) => {
+    const me = find(players, currentUserId);
+    const newPost = {
+      id: `hit-${Date.now()}`,
+      posterId: currentUserId,
+      date, timeRange, location, skillLevel, note,
+      claimedBy: null,
+      createdAt: new Date().toISOString(),
+    };
+    setHitPosts(prev => [newPost, ...prev]);
+    try {
+      const db = await sb.from('hit_posts');
+      await db.insert({
+        id: newPost.id, poster_id: currentUserId, date, time_range: timeRange,
+        location, skill_level: skillLevel, note: note || null, claimed_by: null,
+        created_at: newPost.createdAt,
+      });
+    } catch (e) { console.error('Post hit error:', e); }
+    showToast('Posted to Hit Board!');
+  };
+
+  const claimHit = async (postId) => {
+    const me = find(players, currentUserId);
+    const post = hitPosts.find(p => p.id === postId);
+    const poster = find(players, post?.posterId);
+    setHitPosts(prev => prev.map(p => p.id === postId ? { ...p, claimedBy: currentUserId } : p));
+    try {
+      const db = await sb.from('hit_posts');
+      await db.update({ claimed_by: currentUserId }, { id: postId });
+    } catch (e) { console.error('Claim hit error:', e); }
+    // Email both players
+    if (poster?.email) {
+      await sendEmail({
+        to: poster.email,
+        subject: `🎾 Your hit post was claimed!`,
+        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+          <h2 style="color:#C4522A">Your hit was claimed!</h2>
+          <p><strong>${me?.name}</strong> wants to hit with you.</p>
+          <p>📅 ${post.date} · ${post.timeRange} · ${post.location}</p>
+          <p>Contact them: ${me?.email || ''}${me?.phone ? ` · ${me.phone}` : ''}</p>
+          <p style="color:#7A6548;font-size:13px">— Los Feliz Tennis Club</p>
+        </div>`,
+      });
+    }
+    if (me?.email) {
+      await sendEmail({
+        to: me.email,
+        subject: `🎾 Hit confirmed with ${poster?.name}!`,
+        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+          <h2 style="color:#C4522A">You claimed a hit!</h2>
+          <p>You're set to hit with <strong>${poster?.name}</strong>.</p>
+          <p>📅 ${post.date} · ${post.timeRange} · ${post.location}</p>
+          <p>Contact them: ${poster?.email || ''}${poster?.phone ? ` · ${poster.phone}` : ''}</p>
+          <p style="color:#7A6548;font-size:13px">— Los Feliz Tennis Club</p>
+        </div>`,
+      });
+    }
+    showToast('Hit claimed! Emails sent.');
   };
 
   const showToast = (msg) => {
@@ -1060,6 +1134,9 @@ export default function App() {
               onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })}
               onDelete={deleteMatch}
               onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })}
+              hitPosts={hitPosts}
+              onPostHit={postHit}
+              onClaimHit={claimHit}
             />
           )}
           {tab === 'contacts' && (
@@ -1439,7 +1516,131 @@ function Avatar({ name, size = 32 }) {
 /* ============================================================
    MATCHES VIEW
    ============================================================ */
-function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onDelete, onViewProfile }) {
+const TIME_RANGES = ['Morning (before noon)', 'Afternoon (12–3pm)', 'After 3pm', 'Evening (after 6pm)', 'Flexible'];
+const SKILL_LEVELS = ['Beginner (2.5)', 'Intermediate (3.0–3.5)', 'Advanced (4.0+)', 'Any level'];
+
+function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
+  const [showForm, setShowForm] = useState(false);
+  const [date, setDate] = useState('');
+  const [timeRange, setTimeRange] = useState(TIME_RANGES[0]);
+  const [location, setLocation] = useState(VENUES[0]);
+  const [skillLevel, setSkillLevel] = useState(SKILL_LEVELS[2]);
+  const [note, setNote] = useState('');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const activePosts = hitPosts.filter(p => p.date >= today);
+
+  const handleSubmit = async () => {
+    if (!date) return;
+    await onPostHit({ date, timeRange, location, skillLevel, note });
+    setShowForm(false);
+    setDate(''); setNote('');
+  };
+
+  const inputStyle = { width: '100%', padding: '10px 12px', border: `1.5px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm, color: C.ink, boxSizing: 'border-box' };
+
+  return (
+    <div>
+      {/* Post button */}
+      <button
+        onClick={() => setShowForm(v => !v)}
+        className="w-full py-2.5 rounded-lg text-[12px] font-bold uppercase tracking-[0.1em] mb-4"
+        style={{ background: showForm ? C.inkSoft : C.clay, color: 'white', border: 'none', cursor: 'pointer' }}
+      >
+        {showForm ? 'Cancel' : '+ Post a Hit'}
+      </button>
+
+      {/* Post form */}
+      {showForm && (
+        <div className="rounded-lg p-4 mb-4 space-y-3" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Date *</label>
+            <input type="date" value={date} min={today} onChange={e => setDate(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Time</label>
+            <select value={timeRange} onChange={e => setTimeRange(e.target.value)} style={inputStyle}>
+              {TIME_RANGES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Location</label>
+            <select value={location} onChange={e => setLocation(e.target.value)} style={inputStyle}>
+              {VENUES.filter(v => v !== 'Other').map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Skill Level</label>
+            <select value={skillLevel} onChange={e => setSkillLevel(e.target.value)} style={inputStyle}>
+              {SKILL_LEVELS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Note (optional)</label>
+            <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Casual rally, no hard hitting" style={inputStyle} />
+          </div>
+          <button onClick={handleSubmit} disabled={!date}
+            className="w-full py-2.5 rounded-lg text-[12px] font-bold uppercase tracking-[0.1em]"
+            style={{ background: !date ? C.line : C.green, color: 'white', border: 'none', cursor: date ? 'pointer' : 'default' }}>
+            Post
+          </button>
+        </div>
+      )}
+
+      {/* Posts list */}
+      {activePosts.length === 0 ? (
+        <div className="text-center py-8" style={{ color: C.inkMute }}>
+          <div style={{ fontSize: 32 }}>🎾</div>
+          <div className="text-[13px] mt-2">No open hits yet — post one!</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {activePosts.map(post => {
+            const poster = find(players, post.posterId);
+            const claimer = find(players, post.claimedBy);
+            const isMe = post.posterId === myId;
+            const claimed = !!post.claimedBy;
+            return (
+              <div key={post.id} className="rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}`, opacity: claimed ? 0.75 : 1 }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Avatar name={poster?.name || '?'} size={36} />
+                    <div className="min-w-0">
+                      <div className="font-semibold truncate" style={{ fontSize: 13, fontFamily: '"Fraunces", serif', color: C.ink }}>{poster?.name}</div>
+                      <div style={{ fontSize: 10, color: C.inkMute }}>{post.skillLevel}</div>
+                    </div>
+                  </div>
+                  {!isMe && !claimed && (
+                    <button onClick={() => onClaimHit(post.id)}
+                      className="text-[10px] uppercase tracking-[0.1em] font-bold px-3 py-1.5 rounded flex-shrink-0"
+                      style={{ background: C.green, color: 'white', border: 'none', cursor: 'pointer' }}>
+                      I'm in!
+                    </button>
+                  )}
+                  {claimed && (
+                    <span className="text-[10px] uppercase tracking-[0.1em] font-bold flex-shrink-0" style={{ color: C.greenLight }}>
+                      ✓ Claimed{claimer ? ` by ${claimer.name.split(' ')[0]}` : ''}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[post.date, post.timeRange, post.location].map((v, i) => (
+                    <span key={i} className="text-[10px] px-2 py-1 rounded" style={{ background: C.parchmentWarm, color: C.inkSoft }}>
+                      {v}
+                    </span>
+                  ))}
+                </div>
+                {post.note && <div className="mt-2 text-[11px]" style={{ color: C.inkMute }}>"{post.note}"</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onDelete, onViewProfile, hitPosts, onPostHit, onClaimHit }) {
   const [sub, setSub] = useState('open');
   const [search, setSearch] = useState('');
 
@@ -1467,6 +1668,7 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
       <SectionHeading kicker="Your fixtures" title="Matches" />
 
       {/* Player search to challenge */}
+      {sub !== 'friendlies' && (
       <div className="mb-4 relative">
         <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: C.inkMute, pointerEvents: 'none' }} />
         <input
@@ -1532,11 +1734,13 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
           <div className="text-[12px]" style={{ color: C.inkMute }}>No players found</div>
         </div>
       )}
+      )}
 
       <div className="flex gap-1 mb-4 p-1 rounded-lg" style={{ background: C.parchmentWarm }}>
         {[
           { id: 'open', label: 'Challenges', count: open.length },
           { id: 'history', label: 'History', count: history.length },
+          { id: 'friendlies', label: 'Friendlies', count: 0 },
         ].map(t => (
           <button
             key={t.id}
@@ -1552,7 +1756,11 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
         ))}
       </div>
 
-      {visible.length === 0 && (
+      {sub === 'friendlies' && (
+        <HitBoard hitPosts={hitPosts} myId={myId} players={players} onPostHit={onPostHit} onClaimHit={onClaimHit} />
+      )}
+
+      {sub !== 'friendlies' && visible.length === 0 && (
         <EmptyState
           icon={<Activity size={20} />}
           title={sub === 'open' ? 'No challenges' : 'No matches yet'}
@@ -1560,29 +1768,33 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
         />
       )}
 
-      <div className="space-y-3">
-        {visible.map(m => (
-          <MatchCard
-            key={m.id}
-            match={m}
-            players={players}
-            myId={myId}
-            onAccept={() => onAccept(m.id)}
-            onDecline={() => onDecline(m.id)}
-            onCancel={() => onCancel(m.id)}
-            onReport={() => onReport(m)}
-            onDelete={() => onDelete(m.id)}
-          />
-        ))}
-      </div>
+      {sub !== 'friendlies' && (
+        <div className="space-y-3">
+          {visible.map(m => (
+            <MatchCard
+              key={m.id}
+              match={m}
+              players={players}
+              myId={myId}
+              onAccept={() => onAccept(m.id)}
+              onDecline={() => onDecline(m.id)}
+              onCancel={() => onCancel(m.id)}
+              onReport={() => onReport(m)}
+              onDelete={() => onDelete(m.id)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Club-wide activity feed */}
+      {sub !== 'friendlies' && (
       <div className="mt-6">
         <div className="text-[10px] uppercase tracking-[0.25em] font-bold mb-3" style={{ color: C.inkMute }}>
           Club Activity
         </div>
         <ActivityView matches={matches} players={players} onViewProfile={onViewProfile} />
       </div>
+      )}
     </div>
   );
 }
