@@ -359,8 +359,8 @@ function RequestToJoinScreen({ onBack }) {
   const [error, setError] = useState('');
 
   const handleSubmit = async () => {
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !neighborhood) {
-      setError('Please fill in your name, email, and neighborhood.');
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !phone.trim() || !neighborhood) {
+      setError('Please fill in your name, email, phone, and neighborhood.');
       return;
     }
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
@@ -440,7 +440,7 @@ function RequestToJoinScreen({ onBack }) {
 
               {[
                   { label: 'Email *', value: email, set: setEmail, placeholder: 'your@email.com', type: 'email' },
-                  { label: 'Phone', value: phone, set: setPhone, placeholder: '(323) 555-1234', type: 'tel' },
+                  { label: 'Phone *', value: phone, set: setPhone, placeholder: '(323) 555-1234', type: 'tel' },
                   { label: 'USTA Rating', value: usta, set: setUsta, placeholder: 'e.g. 3.5', type: 'text' },
                 ].map(({ label, value, set, placeholder, type }) => (
                   <div key={label}>
