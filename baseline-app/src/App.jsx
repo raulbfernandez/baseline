@@ -250,7 +250,7 @@ const NEIGHBORHOODS = [
   'Mt. Washington', 'Pasadena', 'Glendale', 'Atwater Village', 'Other'
 ];
 
-const VENUES = ['Vermont Canyon', 'Riverside', "Artin's of Glendale", 'Griffith Park Carousel', 'Other'];
+const VENUES = ['Vermont Canyon', 'Riverside', "Artin's of Glendale", 'Griffith Park Carousel', 'Hermon Park', 'Other'];
 const VENUE_BOOKING = {
   'Vermont Canyon': 'https://recreation.parks.lacity.gov/sports/tennis/facility/vermont-canyon',
   'Riverside': 'https://recreation.parks.lacity.gov/sports/tennis/facility/riverside',
@@ -1516,14 +1516,16 @@ function Avatar({ name, size = 32 }) {
 /* ============================================================
    MATCHES VIEW
    ============================================================ */
-const TIME_RANGES = ['Morning (before noon)', 'Afternoon (12–3pm)', 'After 3pm', 'Evening (after 6pm)', 'Flexible'];
+const TIME_RANGES = ['Specific time...', 'Morning', 'Afternoon', 'Evening', 'Flexible'];
 const SKILL_LEVELS = ['Beginner (2.5)', 'Intermediate (3.0–3.5)', 'Advanced (4.0+)', 'Any level'];
 
 function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
   const [showForm, setShowForm] = useState(false);
   const [date, setDate] = useState('');
   const [timeRange, setTimeRange] = useState(TIME_RANGES[0]);
+  const [specificTime, setSpecificTime] = useState('');
   const [location, setLocation] = useState(VENUES[0]);
+  const [customLocation, setCustomLocation] = useState('');
   const [skillLevel, setSkillLevel] = useState(SKILL_LEVELS[2]);
   const [note, setNote] = useState('');
 
@@ -1532,7 +1534,9 @@ function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
 
   const handleSubmit = async () => {
     if (!date) return;
-    await onPostHit({ date, timeRange, location, skillLevel, note });
+    const finalTime = timeRange === 'Specific time...' ? specificTime || 'Flexible' : timeRange;
+    const finalLocation = location === 'Other' ? customLocation || 'Other' : location;
+    await onPostHit({ date, timeRange: finalTime, location: finalLocation, skillLevel, note });
     setShowForm(false);
     setDate(''); setNote('');
   };
@@ -1562,12 +1566,20 @@ function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
             <select value={timeRange} onChange={e => setTimeRange(e.target.value)} style={inputStyle}>
               {TIME_RANGES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
+            {timeRange === 'Specific time...' && (
+              <input type="time" value={specificTime} onChange={e => setSpecificTime(e.target.value)}
+                style={{ ...inputStyle, marginTop: 8 }} />
+            )}
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Location</label>
             <select value={location} onChange={e => setLocation(e.target.value)} style={inputStyle}>
-              {VENUES.filter(v => v !== 'Other').map(v => <option key={v} value={v}>{v}</option>)}
+              {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
+            {location === 'Other' && (
+              <input type="text" value={customLocation} onChange={e => setCustomLocation(e.target.value)}
+                placeholder="Enter location..." style={{ ...inputStyle, marginTop: 8 }} />
+            )}
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Skill Level</label>
