@@ -245,6 +245,11 @@ const seedMatches = () => ([
   {id:'m71',a:'p27',b:'p19',status:'completed',winnerId:'p27',score:'6-4,6-0',sets:[{a:6,b:4},{a:6,b:0}],date:'2025-12-11',change:4},
 ]);
 
+const NEIGHBORHOODS = [
+  'Hollywood', 'Los Feliz', 'Silver Lake', 'Echo Park', 'Highland Park',
+  'Mt. Washington', 'Pasadena', 'Glendale', 'Atwater Village', 'Other'
+];
+
 const VENUES = ['Vermont Canyon', 'Riverside', "Artin's of Glendale", 'Griffith Park Carousel', 'Other'];
 const VENUE_BOOKING = {
   'Vermont Canyon': 'https://recreation.parks.lacity.gov/sports/tennis/facility/vermont-canyon',
@@ -341,11 +346,137 @@ const calcStats = (playerId, matches, players) => {
 /* ============================================================
    LOGIN SCREEN
    ============================================================ */
+function RequestToJoinScreen({ onBack }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [usta, setUsta] = useState('');
+  const [note, setNote] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (!name.trim() || !email.trim() || !neighborhood) {
+      setError('Please fill in your name, email, and neighborhood.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendEmail({
+        to: 'raulbfernandez@gmail.com',
+        subject: `🎾 New Join Request: ${name}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="color: #C4522A;">New Join Request</h2>
+            <table style="margin: 16px 0; border-collapse: collapse; width: 100%;">
+              <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Name</td><td>${name}</td></tr>
+              <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Email</td><td>${email}</td></tr>
+              <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Neighborhood</td><td>${neighborhood}</td></tr>
+              <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">USTA Rating</td><td>${usta || 'Not provided'}</td></tr>
+              <tr><td style="color: #7A6548; padding: 6px 12px 6px 0; font-weight: bold;">Note</td><td>${note || 'None'}</td></tr>
+            </table>
+            <p style="color: #7A6548; font-size: 13px;">— Los Feliz Tennis Club App</p>
+          </div>
+        `,
+      });
+      setSubmitted(true);
+    } catch (e) {
+      setError('Something went wrong. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ fontFamily: '"DM Sans", sans-serif', background: '#E8DCC8' }}>
+      <PaperTexture />
+      <div className="fixed inset-0 pointer-events-none" style={{ opacity: 0.2 }}>
+        <svg width="100%" height="100%" preserveAspectRatio="none">
+          <rect x="8%" y="5%" width="84%" height="90%" fill="none" stroke={C.clay} strokeWidth="2.5"/>
+          <line x1="0%" y1="50%" x2="100%" y2="50%" stroke={C.clay} strokeWidth="3"/>
+          <line x1="8%" y1="28%" x2="92%" y2="28%" stroke={C.clay} strokeWidth="1.5"/>
+          <line x1="8%" y1="72%" x2="92%" y2="72%" stroke={C.clay} strokeWidth="1.5"/>
+          <line x1="50%" y1="28%" x2="50%" y2="72%" stroke={C.clay} strokeWidth="1.5"/>
+        </svg>
+      </div>
+
+      <div className="w-full max-w-sm relative">
+        <div className="flex justify-center mb-8">
+          <BaselineLogo size={52} />
+        </div>
+
+        <div className="rounded-xl p-6" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
+          {submitted ? (
+            <div className="text-center py-4">
+              <div style={{ fontSize: 40 }}>🎾</div>
+              <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 20, color: C.ink, margin: '12px 0 8px' }}>Request sent!</div>
+              <div className="text-[13px] mb-6" style={{ color: C.inkMute }}>We'll review your request and be in touch soon.</div>
+              <button onClick={onBack} className="w-full py-3 rounded-lg text-[13px] font-bold uppercase tracking-[0.1em]" style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer' }}>
+                Back to Sign In
+              </button>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, color: C.ink, marginBottom: 4 }}>Request to Join</div>
+              <div className="text-[12px] mb-5" style={{ color: C.inkMute }}>East side LA tennis community</div>
+
+              <div className="space-y-3 mb-4">
+                {[
+                  { label: 'Full Name *', value: name, set: setName, placeholder: 'Your name', type: 'text' },
+                  { label: 'Email *', value: email, set: setEmail, placeholder: 'your@email.com', type: 'email' },
+                  { label: 'USTA Rating', value: usta, set: setUsta, placeholder: 'e.g. 3.5', type: 'text' },
+                ].map(({ label, value, set, placeholder, type }) => (
+                  <div key={label}>
+                    <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>{label}</label>
+                    <input type={type} value={value} onChange={e => { set(e.target.value); setError(''); }} placeholder={placeholder}
+                      style={{ width: '100%', padding: '11px 14px', border: `1.5px solid ${C.line}`, borderRadius: 8, fontSize: 15, fontFamily: 'inherit', background: C.parchmentWarm, color: C.ink, boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Neighborhood *</label>
+                  <select value={neighborhood} onChange={e => { setNeighborhood(e.target.value); setError(''); }}
+                    style={{ width: '100%', padding: '11px 14px', border: `1.5px solid ${C.line}`, borderRadius: 8, fontSize: 15, fontFamily: 'inherit', background: C.parchmentWarm, color: neighborhood ? C.ink : C.inkMute, boxSizing: 'border-box' }}>
+                    <option value="">Select neighborhood...</option>
+                    {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Note (optional)</label>
+                  <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Tell us a bit about yourself..." rows={3}
+                    style={{ width: '100%', padding: '11px 14px', border: `1.5px solid ${C.line}`, borderRadius: 8, fontSize: 15, fontFamily: 'inherit', background: C.parchmentWarm, color: C.ink, boxSizing: 'border-box', resize: 'none' }} />
+                </div>
+              </div>
+
+              {error && <div className="text-[12px] mb-3 px-3 py-2 rounded" style={{ background: `${C.clay}18`, color: C.clay }}>{error}</div>}
+
+              <button onClick={handleSubmit} disabled={loading}
+                className="w-full py-3 rounded-lg text-[13px] font-bold uppercase tracking-[0.1em] mb-3"
+                style={{ background: C.clay, color: 'white', border: 'none', cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+                {loading ? 'Sending...' : 'Send Request'}
+              </button>
+
+              <button onClick={onBack} className="w-full py-2.5 rounded-lg text-[12px] font-semibold uppercase tracking-[0.1em]"
+                style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.inkMute, cursor: 'pointer' }}>
+                Back to Sign In
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoginScreen({ players, passwords, onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showJoinRequest, setShowJoinRequest] = useState(false);
+
+  if (showJoinRequest) return <RequestToJoinScreen onBack={() => setShowJoinRequest(false)} />;
 
   const handleLogin = () => {
     const normalized = email.trim().toLowerCase();
@@ -440,6 +571,17 @@ function LoginScreen({ players, passwords, onLogin }) {
 
           <div className="text-[11px] text-center mt-4" style={{ color: C.inkMute }}>
             Default password: <span style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink }}>tennis123</span>
+          </div>
+
+          <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+            <div className="text-[11px] text-center mb-3" style={{ color: C.inkMute }}>New to the club?</div>
+            <button
+              onClick={() => setShowJoinRequest(true)}
+              className="w-full py-2.5 rounded-lg text-[12px] font-bold uppercase tracking-[0.1em]"
+              style={{ background: 'transparent', border: `1.5px solid ${C.clay}`, color: C.clay, cursor: 'pointer' }}
+            >
+              Request to Join
+            </button>
           </div>
         </div>
       </div>
