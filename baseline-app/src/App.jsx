@@ -1668,7 +1668,7 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
       <SectionHeading kicker="Your fixtures" title="Matches" />
 
       {/* Player search to challenge */}
-      {sub !== 'friendlies' && (
+      {sub !== 'friendlies' && (<div>
       <div className="mb-4 relative">
         <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: C.inkMute, pointerEvents: 'none' }} />
         <input
@@ -1734,7 +1734,7 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
           <div className="text-[12px]" style={{ color: C.inkMute }}>No players found</div>
         </div>
       )}
-      )}
+      </div>)}
 
       <div className="flex gap-1 mb-4 p-1 rounded-lg" style={{ background: C.parchmentWarm }}>
         {[
