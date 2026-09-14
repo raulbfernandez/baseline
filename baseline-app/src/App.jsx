@@ -652,6 +652,7 @@ export default function App() {
             gender: p.gender, points: p.points, wins: p.wins, losses: p.losses,
             streak: p.streak, ustaRating: p.usta_rating, profileImage: p.profile_image,
             isActive: p.is_active,
+            role: p.role || 'member',
           })));
         } else {
           // First run — seed players into Supabase
@@ -675,6 +676,7 @@ export default function App() {
             proposedDate: m.proposed_date, location: m.location,
             winnerChange: m.winner_change, loserChange: m.loser_change,
             change: m.change_pts, date: m.match_date,
+            matchType: m.match_type || 'ladder',
           })));
         } else {
           // Seed matches
@@ -723,7 +725,7 @@ export default function App() {
       const payload = {
         id: player.id, name: player.name, email: player.email, phone: player.phone,
         gender: player.gender, points: player.points, wins: player.wins, losses: player.losses,
-        streak: player.streak, is_active: player.isActive !== false,
+        streak: player.streak, is_active: player.isActive !== false, role: player.role || 'member',
       };
       // Only include usta_rating and profile_image if explicitly set
       if (player.ustaRating !== undefined) payload.usta_rating = player.ustaRating || null;
@@ -742,6 +744,7 @@ export default function App() {
         proposed_date: match.proposedDate || null, location: match.location || null,
         winner_change: match.winnerChange || null, loser_change: match.loserChange || null,
         change_pts: match.change || null, match_date: match.date || null,
+        match_type: match.matchType || 'ladder',
       });
     } catch (e) { console.error('Sync match error:', e); }
   };
@@ -772,7 +775,7 @@ export default function App() {
         created_at: newPost.createdAt,
       });
     } catch (e) { console.error('Post hit error:', e); }
-    showToast('Posted to Hit Board!');
+    showToast('Hit requested to Hit Board!');
   };
 
   const claimHit = async (postId) => {
@@ -784,6 +787,22 @@ export default function App() {
       const db = await sb.from('hit_posts');
       await db.update({ claimed_by: currentUserId }, { id: postId });
     } catch (e) { console.error('Claim hit error:', e); }
+
+    // Auto-create a friendly match
+    const friendlyMatch = {
+      id: `friendly-${Date.now()}`,
+      a: post.posterId,
+      b: currentUserId,
+      status: 'scheduled',
+      matchType: 'friendly',
+      proposedDate: post.date,
+      location: post.location,
+      winnerId: null, score: null, sets: null,
+      winnerChange: 0, loserChange: 0, change: 0,
+    };
+    setMatches(prev => [friendlyMatch, ...prev]);
+    await syncMatch(friendlyMatch);
+
     // Email both players
     if (poster?.email) {
       await sendEmail({
@@ -899,6 +918,17 @@ export default function App() {
     return me && ADMINS.includes(me.email.toLowerCase());
   };
 
+  const toggleRole = async (playerId) => {
+    const player = find(players, playerId);
+    const newRole = player?.role === 'guest' ? 'member' : 'guest';
+    setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, role: newRole } : p));
+    try {
+      const db = await sb.from('players');
+      await db.update({ role: newRole }, { id: playerId });
+    } catch (e) { console.error('Toggle role error:', e); }
+    showToast(`${player?.name} is now a ${newRole}`);
+  };
+
   const togglePlayerActive = async (playerId) => {
     const player = find(players, playerId);
     const newActive = player?.isActive === false ? true : false;
@@ -914,20 +944,23 @@ export default function App() {
     setPlayers(prev => prev.map(p => p.id === currentUserId ? { ...p, ...updates } : p));
     try {
       const db = await sb.from('players');
-      await db.update({
-        usta_rating: updates.ustaRating || null,
-        profile_image: updates.profileImage || null,
-      }, { id: currentUserId });
+      const payload = {};
+      if (updates.ustaRating !== undefined) payload.usta_rating = updates.ustaRating || null;
+      if (updates.profileImage !== undefined) payload.profile_image = updates.profileImage || null;
+      if (Object.keys(payload).length > 0) {
+        await db.update(payload, { id: currentUserId });
+      }
     } catch (e) { console.error('Profile update error:', e); }
     showToast('Profile updated');
   };
 
   /* Challenge another player */
-  const proposeChallenge = async ({ opponentId, date, location }) => {
+  const proposeChallenge = async ({ opponentId, date, location, matchType = 'ladder' }) => {
     const newMatch = {
       id: 'm' + Date.now(),
       a: currentUserId, b: opponentId,
       status: 'scheduled',
+      matchType,
       proposedDate: date,
       location,
       createdAt: new Date().toISOString().slice(0, 10),
@@ -938,26 +971,28 @@ export default function App() {
     // Email the opponent
     const challenger = find(players, currentUserId);
     const opponent = find(players, opponentId);
+    const isFriendly = matchType === 'friendly';
     if (opponent?.email) {
       await sendEmail({
         to: opponent.email,
-        subject: `🎾 You've been challenged on Los Feliz Tennis Club!`,
+        subject: `🎾 ${isFriendly ? 'Friendly match' : 'Challenge'} from ${challenger?.name}!`,
         html: `
           <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-            <h2 style="color: #C4522A;">You've been challenged!</h2>
-            <p><strong>${challenger?.name || 'A player'}</strong> has challenged you to a match on <strong>Los Feliz Tennis Club</strong>.</p>
+            <h2 style="color: #C4522A;">${isFriendly ? '🎾 Friendly match request!' : 'You\'ve been challenged!'}</h2>
+            <p><strong>${challenger?.name || 'A player'}</strong> has invited you to a ${isFriendly ? 'friendly match' : 'ladder match'} on <strong>Los Feliz Tennis Club</strong>.</p>
             <table style="margin: 16px 0; border-collapse: collapse;">
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📅 Date</td><td><strong>${date}</strong></td></tr>
               <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📍 Location</td><td><strong>${location}</strong></td></tr>
+              <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">🏷️ Type</td><td><strong>${isFriendly ? 'Friendly (no ranking effect)' : 'Ladder match'}</strong></td></tr>
             </table>
-            <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #C4522A;">Baseline</a> to view your challenge.</p>
+            <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #C4522A;">Los Feliz Tennis Club</a> to view your challenge.</p>
             <p style="color: #7A6548; font-size: 13px;">— The Los Feliz Tennis Club Team</p>
           </div>
         `,
       });
     }
 
-    showToast(`Challenge sent to ${opponent?.name}`);
+    showToast(`${isFriendly ? 'Friendly' : 'Challenge'} sent to ${opponent?.name}`);
   };
 
   const acceptMatch = async (matchId) => {
@@ -1016,11 +1051,13 @@ export default function App() {
     if (!match) return;
     const loserId = winnerId === match.a ? match.b : match.a;
     const winnerSide = winnerId === match.a ? 'a' : 'b';
-    const earned = calcPoints(sets, winnerSide);
+    const isFriendly = match.matchType === 'friendly';
+    const earned = isFriendly ? { a: 0, b: 0 } : calcPoints(sets, winnerSide);
     const winnerPoints = winnerSide === 'a' ? earned.a : earned.b;
     const loserPoints  = winnerSide === 'a' ? earned.b : earned.a;
 
     const newPlayers = players.map(p => {
+      if (isFriendly) return p; // friendlies don't affect stats
       if (p.id === winnerId) return {
         ...p,
         points: p.points + winnerPoints,
@@ -1120,7 +1157,7 @@ export default function App() {
 
         <div className="px-5">
           {tab === 'ladder' && (
-            <LadderView ranked={ranked} matches={matches} myId={currentUserId} isAdmin={isAdmin()} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })} />
+            <LadderView ranked={ranked} matches={matches} myId={currentUserId} isAdmin={isAdmin()} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })} players={players} />
           )}
           {tab === 'matches' && (
             <MatchesView
@@ -1134,13 +1171,22 @@ export default function App() {
               onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })}
               onDelete={deleteMatch}
               onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })}
+              onReportFriendly={() => setModal({ kind: 'reportFriendly' })}
+            />
+          )}
+          {tab === 'community' && (
+            <CommunityView
               hitPosts={hitPosts}
+              matches={matches}
+              players={players}
+              myId={currentUserId}
               onPostHit={postHit}
               onClaimHit={claimHit}
+              onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })}
             />
           )}
           {tab === 'contacts' && (
-            <ContactsView players={players} myId={currentUserId} isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} />
+            <ContactsView players={players} myId={currentUserId} isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onToggleRole={toggleRole} />
           )}
           {tab === 'profile' && (
             <ProfileView me={me} myRank={myRank} matches={matches} players={players} onChangePassword={changePassword} onUpdateProfile={updateProfile} onDeleteMatch={deleteMatch} isAdmin={isAdmin()} onReset={reset} onSignOut={handleSignOut} />
@@ -1174,6 +1220,28 @@ export default function App() {
           matches={matches}
           myId={currentUserId}
           onClose={() => setModal(null)}
+        />
+      )}
+
+      {modal?.kind === 'reportFriendly' && (
+        <FriendlyMatchModal
+          players={players}
+          myId={currentUserId}
+          onClose={() => setModal(null)}
+          onSubmit={async ({ opponentId, scoreStr, sets, winnerId, date }) => {
+            const matchId = `friendly-${Date.now()}`;
+            const newMatch = {
+              id: matchId, a: currentUserId, b: opponentId,
+              status: 'completed', matchType: 'friendly',
+              winnerId, score: scoreStr, sets,
+              date: date || new Date().toISOString().slice(0, 10),
+              winnerChange: 0, loserChange: 0, change: 0,
+            };
+            setMatches(prev => [newMatch, ...prev]);
+            await syncMatch(newMatch);
+            setModal(null);
+            showToast('Friendly match logged!');
+          }}
         />
       )}
 
@@ -1295,8 +1363,10 @@ function StreakBadge({ streak }) {
 /* ============================================================
    LADDER VIEW
    ============================================================ */
-function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleActive, onChallenge }) {
+function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleActive, onChallenge, players }) {
   const [showInactive, setShowInactive] = useState(false);
+  const me = ranked.find(p => p.id === myId) || players?.find(p => p.id === myId);
+  const isGuest = me?.role === 'guest';
 
   const visiblePlayers = useMemo(() => {
     if (isAdmin && showInactive) return ranked;
@@ -1312,6 +1382,15 @@ function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleAct
 
   return (
     <div>
+      {isGuest && (
+        <div className="mb-4 rounded-lg px-4 py-3 flex items-center gap-3" style={{ background: `${C.clay}15`, border: `1.5px solid ${C.clay}40` }}>
+          <div className="flex-1">
+            <div className="text-[12px] font-bold mb-0.5" style={{ color: C.clay }}>You're viewing as a Guest</div>
+            <div className="text-[11px]" style={{ color: C.inkMute }}>Become a member to join the ladder and compete for rankings.</div>
+          </div>
+          <div style={{ fontSize: 20 }}>🏆</div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-3">
         <SectionHeading kicker="Standings" title="Ladder" />
         {isAdmin && inactiveCount > 0 && (
@@ -1551,7 +1630,7 @@ function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
         className="w-full py-2.5 rounded-lg text-[12px] font-bold uppercase tracking-[0.1em] mb-4"
         style={{ background: showForm ? C.inkSoft : C.clay, color: 'white', border: 'none', cursor: 'pointer' }}
       >
-        {showForm ? 'Cancel' : '+ Post a Hit'}
+        {showForm ? 'Cancel' : '+ Request a Hit'}
       </button>
 
       {/* Post form */}
@@ -1603,7 +1682,7 @@ function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
       {activePosts.length === 0 ? (
         <div className="text-center py-8" style={{ color: C.inkMute }}>
           <div style={{ fontSize: 32 }}>🎾</div>
-          <div className="text-[13px] mt-2">No open hits yet — post one!</div>
+          <div className="text-[13px] mt-2">No open hit requests yet — post one!</div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -1652,13 +1731,17 @@ function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
   );
 }
 
-function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onDelete, onViewProfile, hitPosts, onPostHit, onClaimHit }) {
+function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onDelete, onViewProfile, onReportFriendly }) {
   const [sub, setSub] = useState('open');
+  const [historyFilter, setHistoryFilter] = useState('all');
   const [search, setSearch] = useState('');
 
   const myMatches = matches.filter(m => m.a === myId || m.b === myId);
   const open = myMatches.filter(m => m.status === 'scheduled');
-  const history = myMatches.filter(m => m.status === 'completed').sort((a, b) => b.date.localeCompare(a.date));
+  const allHistory = myMatches.filter(m => m.status === 'completed').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const history = historyFilter === 'all' ? allHistory
+    : historyFilter === 'ladder' ? allHistory.filter(m => m.matchType !== 'friendly')
+    : allHistory.filter(m => m.matchType === 'friendly');
 
   const visible = sub === 'open' ? open : history;
 
@@ -1677,7 +1760,7 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
 
   return (
     <div>
-      <SectionHeading kicker="Your fixtures" title="Matches" />
+      <SectionHeading kicker="Your fixtures" title="My Matches" />
 
       {/* Player search to challenge */}
       {sub !== 'friendlies' && (<div>
@@ -1752,7 +1835,6 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
         {[
           { id: 'open', label: 'Challenges', count: open.length },
           { id: 'history', label: 'History', count: history.length },
-          { id: 'friendlies', label: 'Friendlies', count: 0 },
         ].map(t => (
           <button
             key={t.id}
@@ -1772,6 +1854,17 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
         <HitBoard hitPosts={hitPosts} myId={myId} players={players} onPostHit={onPostHit} onClaimHit={onClaimHit} />
       )}
 
+      {sub === 'history' && (
+        <div className="flex gap-1.5 mb-3">
+          {['all', 'ladder', 'friendly'].map(f => (
+            <button key={f} onClick={() => setHistoryFilter(f)}
+              className="text-[10px] uppercase tracking-[0.12em] font-bold px-3 py-1 rounded-full"
+              style={{ background: historyFilter === f ? C.ink : C.parchmentWarm, color: historyFilter === f ? C.parchment : C.inkMute, border: 'none', cursor: 'pointer' }}>
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
       {sub !== 'friendlies' && visible.length === 0 && (
         <EmptyState
           icon={<Activity size={20} />}
@@ -1798,15 +1891,6 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
         </div>
       )}
 
-      {/* Club-wide activity feed */}
-      {sub !== 'friendlies' && (
-      <div className="mt-6">
-        <div className="text-[10px] uppercase tracking-[0.25em] font-bold mb-3" style={{ color: C.inkMute }}>
-          Club Activity
-        </div>
-        <ActivityView matches={matches} players={players} onViewProfile={onViewProfile} />
-      </div>
-      )}
     </div>
   );
 }
@@ -1818,21 +1902,23 @@ function MatchCard({ match, players, myId, onAccept, onDecline, onCancel, onRepo
     const won = match.winnerId === myId;
     const ranked = rank(players);
     const oppRank = ranked.findIndex(p => p.id === opponent?.id) + 1;
+    const isFriendly = match.matchType === 'friendly';
     return (
       <div
         className="rounded-lg px-4 py-3"
         style={{
           background: 'rgba(255,255,255,0.88)',
           border: `1px solid ${C.line}`,
-          borderLeft: `4px solid ${won ? C.win : C.loss}`,
+          borderLeft: `4px solid ${isFriendly ? C.greenMid : (won ? C.win : C.loss)}`,
         }}
       >
-        {/* Top row: W/L + opponent + delete */}
+        {/* Top row: W/L + opponent + type badge + delete */}
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+            {!isFriendly && <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>}
+            {isFriendly && <span className="text-[9px] font-bold uppercase flex-shrink-0 px-1.5 py-0.5 rounded" style={{ background: C.greenMid, color: 'white' }}>Friendly</span>}
             <span className="text-[14px] font-semibold truncate" style={{ fontFamily: '"Fraunces", serif', color: C.ink }}>{opponent?.name}</span>
-            <span className="text-[11px] flex-shrink-0" style={{ color: C.inkMute }}>#{oppRank}</span>
+            {!isFriendly && <span className="text-[11px] flex-shrink-0" style={{ color: C.inkMute }}>#{oppRank}</span>}
           </div>
           <button
             onClick={() => onDelete()}
@@ -1845,7 +1931,7 @@ function MatchCard({ match, players, myId, onAccept, onDecline, onCancel, onRepo
         <div className="flex items-center justify-between">
           <span className="text-[12px]" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.inkMute }}>{match.score}</span>
           <div className="flex items-center gap-3">
-            <span className="text-[12px] font-bold" style={{ color: won ? C.win : C.loss }}>{won ? '+' : ''}{match.change} pts</span>
+            {!isFriendly && <span className="text-[12px] font-bold" style={{ color: won ? C.win : C.loss }}>{won ? '+' : ''}{match.change} pts</span>}
             <span className="text-[11px]" style={{ color: C.inkMute }}>{fmtDate(match.date)}</span>
           </div>
         </div>
@@ -1945,7 +2031,7 @@ function MatchCard({ match, players, myId, onAccept, onDecline, onCancel, onRepo
 /* ============================================================
    CONTACTS VIEW
    ============================================================ */
-function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassword, onViewProfile, onToggleActive }) {
+function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassword, onViewProfile, onToggleActive, onToggleRole }) {
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   
@@ -2089,6 +2175,15 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
                 )}
                 {canManagePasswords && (
                   <button
+                    onClick={() => onToggleRole(p.id)}
+                    className="text-[10px] uppercase tracking-[0.1em] px-2 py-1 rounded flex items-center gap-1"
+                    style={{ background: p.role === 'guest' ? C.green : C.inkSoft, color: C.parchment }}
+                  >
+                    {p.role === 'guest' ? '→ Member' : '→ Guest'}
+                  </button>
+                )}
+                {canManagePasswords && (
+                  <button
                     onClick={() => handleResetPassword(p.email, p.name)}
                     className="text-[10px] uppercase tracking-[0.1em] px-2 py-1 rounded flex items-center gap-1"
                     style={{ background: C.clay, color: C.parchment }}
@@ -2203,35 +2298,26 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
   const [editingProfile, setEditingProfile] = useState(false);
   const [ustaRating, setUstaRating] = useState(me.ustaRating || '');
   const [cropSrc, setCropSrc] = useState(null);
+  const [historyFilter, setHistoryFilter] = useState('all');
 
   const myCompleted = matches.filter(m => (m.a === me.id || m.b === me.id) && m.status === 'completed');
-  const winRate = me.wins + me.losses === 0 ? 0 : Math.round((me.wins / (me.wins + me.losses)) * 100);
-  const totalMatches = me.wins + me.losses;
+  const ladderCompleted = myCompleted.filter(m => m.matchType !== 'friendly');
+  const friendlyCompleted = myCompleted.filter(m => m.matchType === 'friendly');
+  const lW = ladderCompleted.filter(m => m.winnerId === me.id).length;
+  const lL = ladderCompleted.length - lW;
+  const fW = friendlyCompleted.filter(m => m.winnerId === me.id).length;
+  const fL = friendlyCompleted.length - fW;
 
-  // Build point history from completed matches
-  const history = useMemo(() => {
-    const sorted = [...myCompleted].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-    let running = 0;
-    const points = sorted.map(m => {
-      running += (m.change || 0);
-      return { date: m.date ? m.date.slice(5) : '—', points: running };
-    });
-    return points.length > 0 ? points : [{ date: 'Start', points: 0 }];
-  }, [myCompleted]);
+  const filteredHistory = historyFilter === 'all' ? myCompleted
+    : historyFilter === 'ladder' ? ladderCompleted
+    : friendlyCompleted;
+  const sortedHistory = [...filteredHistory].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
   const handlePasswordChange = () => {
-    if (newPassword.length < 6) {
-      alert('Password must be at least 6 characters');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      alert('Passwords do not match');
-      return;
-    }
+    if (newPassword.length < 6) { alert('Password must be at least 6 characters'); return; }
+    if (newPassword !== confirmPassword) { alert('Passwords do not match'); return; }
     onChangePassword(newPassword);
-    setNewPassword('');
-    setConfirmPassword('');
-    setShowPasswordChange(false);
+    setNewPassword(''); setConfirmPassword(''); setShowPasswordChange(false);
   };
 
   const handleImageUpload = (e) => {
@@ -2261,79 +2347,69 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
     }
   };
 
-  const handleSaveProfile = () => {
-    onUpdateProfile({ ustaRating });
-    setEditingProfile(false);
-  };
+  const ranked = rank(players);
 
   return (
     <div>
       {cropSrc && <ImageCropModal imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />}
       <SectionHeading kicker="Player card" title="Your Profile" />
 
-      {/* Inactive Status Alert */}
-      {me.isActive === false && (
-        <div className="mb-4 rounded-lg p-4" style={{ background: `${C.inkMute}20`, border: `2px solid ${C.inkMute}` }}>
-          <div className="flex items-center gap-2 mb-2">
-            <User size={16} style={{ color: C.inkMute }} />
-            <span className="text-[13px] font-bold uppercase tracking-[0.1em]" style={{ color: C.inkMute }}>
-              Inactive Profile
-            </span>
-          </div>
-          <div className="text-[12px]" style={{ color: C.inkMute }}>
-            This profile is currently hidden from the ladder and contacts directory. Only admins can see and re-activate this account.
-          </div>
+      {/* Guest alert */}
+      {me.role === 'guest' && (
+        <div className="mb-4 rounded-lg px-4 py-3" style={{ background: `${C.clay}15`, border: `1.5px solid ${C.clay}40` }}>
+          <div className="text-[12px] font-bold mb-0.5" style={{ color: C.clay }}>Guest Member</div>
+          <div className="text-[11px]" style={{ color: C.inkMute }}>You can post on the Hit Board and play friendly matches. Contact an admin to become a full member and join the ladder.</div>
         </div>
       )}
 
-      {/* Combined player card */}
-      <div
-        className="relative rounded-lg p-5 mb-4 overflow-hidden"
-        style={{ background: C.green, color: C.parchment }}
-      >
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.12 }} preserveAspectRatio="none">
+      {/* Inactive alert */}
+      {me.isActive === false && (
+        <div className="mb-4 rounded-lg px-4 py-3" style={{ background: `${C.inkMute}20`, border: `2px solid ${C.inkMute}` }}>
+          <div className="text-[12px] font-bold mb-0.5" style={{ color: C.inkMute }}>Inactive Profile</div>
+          <div className="text-[11px]" style={{ color: C.inkMute }}>Hidden from ladder and contacts. Only admins can reactivate this account.</div>
+        </div>
+      )}
+
+      {/* Player card */}
+      <div className="relative rounded-xl p-5 mb-4 overflow-hidden" style={{ background: C.clay, color: C.parchment }}>
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.1 }} preserveAspectRatio="none">
           <line x1="0" y1="100%" x2="100%" y2="100%" stroke="white" strokeWidth="3"/>
-          <line x1="0" y1="70%" x2="100%" y2="70%" stroke="white" strokeWidth="1.5"/>
-          <line x1="50%" y1="0" x2="50%" y2="70%" stroke="white" strokeWidth="1.5"/>
+          <line x1="0" y1="65%" x2="100%" y2="65%" stroke="white" strokeWidth="1.5"/>
+          <line x1="50%" y1="0" x2="50%" y2="65%" stroke="white" strokeWidth="1.5"/>
         </svg>
 
-        {/* Photo + name */}
-        <div className="flex items-start gap-4 mb-4 relative">
+        {/* Photo + name + USTA */}
+        <div className="flex items-center gap-4 mb-5 relative">
           <div className="relative flex-shrink-0">
-            {me.profileImage ? (
-              <img src={me.profileImage} alt={me.name} style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.5)' }} />
-            ) : (
-              <Avatar name={me.name} size={72} />
-            )}
-            <label htmlFor="profile-upload" className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center cursor-pointer" style={{ background: C.clay, color: 'white', border: '2px solid rgba(255,255,255,0.6)' }}>
+            {me.profileImage
+              ? <img src={me.profileImage} alt={me.name} style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.4)' }} />
+              : <Avatar name={me.name} size={96} />
+            }
+            <label htmlFor="profile-upload" className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer" style={{ background: C.clayDeep, color: 'white', border: '2px solid rgba(255,255,255,0.5)' }}>
               <User size={12} />
               <input id="profile-upload" type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
             </label>
           </div>
           <div className="flex-1 min-w-0">
-            <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, lineHeight: 1.1, marginBottom: 4 }}>
-              {me.name}
+            <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, lineHeight: 1.1, marginBottom: 6 }}>{me.name}</div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.9)', letterSpacing: '0.15em' }}>
+                {me.role === 'guest' ? 'Guest' : 'Member'}
+              </span>
             </div>
             {editingProfile ? (
-              <div className="space-y-2 mt-2">
-                <input
-                  type="text"
-                  placeholder="USTA rating e.g. 4.5"
-                  value={ustaRating}
-                  onChange={e => setUstaRating(e.target.value)}
-                  style={{ width: '100%', padding: '6px 10px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, fontSize: 14, background: 'rgba(255,255,255,0.15)', color: 'white' }}
-                />
+              <div className="space-y-2">
+                <input type="text" placeholder="USTA rating e.g. 4.5" value={ustaRating} onChange={e => setUstaRating(e.target.value)}
+                  style={{ width: '100%', padding: '6px 10px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, fontSize: 14, background: 'rgba(255,255,255,0.15)', color: 'white', boxSizing: 'border-box' }} />
                 <div className="flex gap-2">
-                  <button onClick={handleSaveProfile} className="flex-1 py-1.5 text-[10px] font-semibold rounded uppercase tracking-[0.1em]" style={{ background: 'rgba(255,255,255,0.2)', color: 'white' }}>Save</button>
-                  <button onClick={() => { setEditingProfile(false); setUstaRating(me.ustaRating || ''); }} className="flex-1 py-1.5 text-[10px] font-semibold rounded uppercase tracking-[0.1em]" style={{ border: '1px solid rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.7)' }}>Cancel</button>
+                  <button onClick={() => { onUpdateProfile({ ustaRating }); setEditingProfile(false); }} className="flex-1 py-1.5 text-[10px] font-semibold rounded uppercase tracking-[0.1em]" style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', cursor: 'pointer' }}>Save</button>
+                  <button onClick={() => { setEditingProfile(false); setUstaRating(me.ustaRating || ''); }} className="flex-1 py-1.5 text-[10px] font-semibold rounded uppercase tracking-[0.1em]" style={{ border: '1px solid rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.7)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3">
-                {me.ustaRating && (
-                  <span className="text-[11px] font-bold" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.optic }}>{me.ustaRating} USTA</span>
-                )}
-                <button onClick={() => setEditingProfile(true)} className="text-[10px] uppercase tracking-[0.1em] px-2 py-0.5 rounded" style={{ border: '1px solid rgba(255,255,255,0.35)', color: 'rgba(255,255,255,0.7)' }}>
+              <div className="flex items-center gap-2">
+                {me.ustaRating && <span style={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, color: C.optic }}>{me.ustaRating} USTA</span>}
+                <button onClick={() => setEditingProfile(true)} style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 8px', border: '1px solid rgba(255,255,255,0.35)', color: 'rgba(255,255,255,0.7)', background: 'transparent', borderRadius: 4, cursor: 'pointer' }}>
                   {me.ustaRating ? 'Edit' : 'Add USTA'}
                 </button>
               </div>
@@ -2341,162 +2417,83 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 relative">
+        {/* Rank + Points */}
+        <div className="grid grid-cols-2 gap-3 mb-4 relative">
           <Stat label="Rank" value={`#${myRank}`} accent={C.optic} />
           <Stat label="Points" value={me.points} mono />
-          <Stat label="Win %" value={`${winRate}%`} accent={winRate >= 50 ? C.optic : C.clayLight} />
         </div>
-      </div>
-      <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Lock size={14} style={{ color: C.inkMute }} />
-            <span className="text-[12px] font-semibold" style={{ color: C.ink }}>Password</span>
-          </div>
-          {!showPasswordChange && (
-            <button
-              onClick={() => setShowPasswordChange(true)}
-              className="text-[11px] uppercase tracking-[0.1em] px-2 py-1 rounded"
-              style={{ color: C.clay, border: `1px solid ${C.clay}` }}
-            >
-              Change
-            </button>
-          )}
-        </div>
-        {showPasswordChange ? (
-          <div className="space-y-2 mt-3">
-            <input
-              type="password"
-              placeholder="New password (min 6 characters)"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm }}
-            />
-            <input
-              type="password"
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm }}
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={handlePasswordChange}
-                className="flex-1 py-2 text-[11px] font-semibold rounded uppercase tracking-[0.1em]"
-                style={{ background: C.ink, color: C.parchment }}
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setShowPasswordChange(false);
-                  setNewPassword('');
-                  setConfirmPassword('');
-                }}
-                className="flex-1 py-2 text-[11px] font-semibold rounded uppercase tracking-[0.1em]"
-                style={{ border: `1px solid ${C.line}`, color: C.inkMute }}
-              >
-                Cancel
-              </button>
+
+        {/* Ladder vs Friendly */}
+        <div className="grid grid-cols-2 gap-2 relative">
+          <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
+            <div className="text-[9px] uppercase tracking-[0.2em] font-bold mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>🏆 Ladder</div>
+            <div className="flex items-baseline gap-1">
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, fontSize: 22, color: C.optic }}>{lW}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>W</span>
+              <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.2)', margin: '0 4px' }}>·</span>
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, fontSize: 22, color: 'rgba(255,255,255,0.6)' }}>{lL}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>L</span>
             </div>
           </div>
-        ) : (
-          <div className="text-[11px]" style={{ color: C.inkMute }}>
-            ••••••••
+          <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
+            <div className="text-[9px] uppercase tracking-[0.2em] font-bold mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>🎾 Friendly</div>
+            <div className="flex items-baseline gap-1">
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, fontSize: 22, color: C.optic }}>{fW}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>W</span>
+              <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.2)', margin: '0 4px' }}>·</span>
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, fontSize: 22, color: 'rgba(255,255,255,0.6)' }}>{fL}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>L</span>
+            </div>
           </div>
-        )}
-      </div>
-
-      <div
-        className="rounded-lg p-4 mb-5"
-        style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>
-            Points Trend
-          </div>
-          <div className="text-[10px]" style={{ color: C.inkMute }}>
-            Last {history.length} matches
-          </div>
-        </div>
-        <div style={{ height: 140 }}>
-          <ResponsiveContainer>
-            <AreaChart data={history} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={C.clay} stopOpacity={0.4} />
-                  <stop offset="100%" stopColor={C.clay} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.inkMute }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: C.inkMute }} axisLine={false} tickLine={false} domain={['dataMin - 5', 'dataMax + 5']} />
-              <Tooltip
-                contentStyle={{
-                  background: C.ink, border: 'none', borderRadius: 6,
-                  color: C.parchment, fontSize: 11,
-                  fontFamily: '"JetBrains Mono", monospace',
-                }}
-                labelStyle={{ color: 'rgba(255,255,255,0.5)' }}
-              />
-              <Area
-                type="monotone" dataKey="points"
-                stroke={C.clay} strokeWidth={2}
-                fill="url(#grad)"
-                dot={{ fill: C.clay, r: 3 }}
-                activeDot={{ fill: C.clay, r: 5 }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
         </div>
       </div>
 
-      <div className="mb-5">
-        <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-3" style={{ color: C.inkMute }}>Stats</div>
-        <StatsPanel playerId={me.id} matches={matches} players={players} />
-      </div>
-
-      <div>
-        <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-3" style={{ color: C.inkMute }}>
-          Match History
+      {/* Match History */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>Match History</div>
+          <div className="flex gap-1.5">
+            {['all', 'ladder', 'friendly'].map(f => (
+              <button key={f} onClick={() => setHistoryFilter(f)}
+                className="text-[10px] uppercase tracking-[0.12em] font-bold px-2.5 py-1 rounded-full"
+                style={{ background: historyFilter === f ? C.ink : C.parchmentWarm, color: historyFilter === f ? C.parchment : C.inkMute, border: 'none', cursor: 'pointer' }}>
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
-        {myCompleted.length === 0 ? (
+
+        {sortedHistory.length === 0 ? (
           <div className="rounded-lg p-4 text-center" style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}` }}>
-            <div className="text-[12px]" style={{ color: C.inkMute }}>No matches played yet</div>
+            <div className="text-[12px]" style={{ color: C.inkMute }}>No matches yet</div>
           </div>
         ) : (
           <div className="space-y-2">
-            {[...myCompleted].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((m, idx) => {
+            {sortedHistory.map(m => {
               const opponent = m.a === me.id ? find(players, m.b) : find(players, m.a);
               const won = m.winnerId === me.id;
-              const ranked = rank(players);
+              const isFriendly = m.matchType === 'friendly';
               const oppRank = ranked.findIndex(p => p.id === opponent?.id) + 1;
               return (
-                <div
-                  key={m.id}
-                  className="rounded-lg px-4 py-3"
-                  style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}`, borderLeft: `4px solid ${won ? C.win : C.loss}` }}
-                >
-                  {/* Top row: W/L + opponent + delete */}
+                <div key={m.id} className="rounded-lg px-4 py-3"
+                  style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}`, borderLeft: `4px solid ${isFriendly ? C.greenMid : (won ? C.win : C.loss)}` }}>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+                      {isFriendly
+                        ? <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: C.greenMid, color: 'white' }}>Friendly</span>
+                        : <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+                      }
                       <span className="text-[14px] font-semibold truncate" style={{ fontFamily: '"Fraunces", serif', color: C.ink }}>{opponent?.name || 'Unknown'}</span>
-                      <span className="text-[11px] flex-shrink-0" style={{ color: C.inkMute }}>#{oppRank}</span>
+                      {!isFriendly && <span className="text-[11px] flex-shrink-0" style={{ color: C.inkMute }}>#{oppRank}</span>}
                     </div>
-                    <button
-                      onClick={() => onDeleteMatch(m.id)}
-                      title="Delete match"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkMute, padding: '4px', flexShrink: 0 }}
-                    >
+                    <button onClick={() => onDeleteMatch(m.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkMute, padding: '4px', flexShrink: 0 }}>
                       <X size={13} />
                     </button>
                   </div>
-                  {/* Bottom row: score + pts + date */}
                   <div className="flex items-center justify-between">
                     <span className="text-[12px]" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.inkMute }}>{m.score}</span>
                     <div className="flex items-center gap-3">
-                      <span className="text-[12px] font-bold" style={{ color: won ? C.win : C.loss }}>{won ? '+' : ''}{m.change} pts</span>
+                      {!isFriendly && <span className="text-[12px] font-bold" style={{ color: won ? C.win : C.loss }}>{won ? '+' : ''}{m.change} pts</span>}
                       <span className="text-[11px]" style={{ color: C.inkMute }}>{fmtDate(m.date)}</span>
                     </div>
                   </div>
@@ -2506,26 +2503,47 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
           </div>
         )}
       </div>
-      {/* Admin section */}
+
+      {/* Password */}
+      <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[12px] font-semibold" style={{ color: C.ink }}>Password</span>
+          {!showPasswordChange && (
+            <button onClick={() => setShowPasswordChange(true)} className="text-[11px] uppercase tracking-[0.1em] px-2 py-1 rounded"
+              style={{ color: C.clay, border: `1px solid ${C.clay}`, background: 'transparent', cursor: 'pointer' }}>Change</button>
+          )}
+        </div>
+        {showPasswordChange ? (
+          <div className="space-y-2 mt-3">
+            <input type="password" placeholder="New password (min 6 characters)" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+              style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm, boxSizing: 'border-box' }} />
+            <input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+              style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm, boxSizing: 'border-box' }} />
+            <div className="flex gap-2">
+              <button onClick={handlePasswordChange} className="flex-1 py-2 text-[11px] font-semibold rounded uppercase tracking-[0.1em]" style={{ background: C.ink, color: C.parchment, border: 'none', cursor: 'pointer' }}>Save</button>
+              <button onClick={() => { setShowPasswordChange(false); setNewPassword(''); setConfirmPassword(''); }} className="flex-1 py-2 text-[11px] font-semibold rounded uppercase tracking-[0.1em]" style={{ border: `1px solid ${C.line}`, color: C.inkMute, background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-[11px]" style={{ color: C.inkMute }}>••••••••</div>
+        )}
+      </div>
+
+      {/* Admin */}
       {isAdmin && (
-        <div className="mt-6 mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
+        <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
           <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-3" style={{ color: C.inkMute }}>Admin</div>
-          <button
-            onClick={() => { if (window.confirm('Reset all data to defaults? This cannot be undone.')) onReset(); }}
+          <button onClick={() => { if (window.confirm && !window.confirm('Reset ladder to defaults? This cannot be undone.')) return; onReset(); }}
             className="w-full py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
-            style={{ background: 'transparent', border: `1px solid ${C.clay}`, color: C.clay }}
-          >
+            style={{ border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
             Reset Ladder to Defaults
           </button>
         </div>
       )}
 
       {/* Sign out */}
-      <button
-        onClick={onSignOut}
-        className="w-full py-3 mb-6 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
-        style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.inkMute }}
-      >
+      <button onClick={onSignOut} className="w-full py-3 mb-6 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
+        style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.inkMute, cursor: 'pointer' }}>
         Sign Out
       </button>
     </div>
@@ -2643,64 +2661,82 @@ function Toast({ msg }) {
    ACTIVITY VIEW — club-wide match feed
    ============================================================ */
 function ActivityView({ matches, players, onViewProfile }) {
+  const [filter, setFilter] = useState('all');
+
   const completed = [...matches]
     .filter(m => m.status === 'completed')
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
+  const visible = filter === 'all' ? completed
+    : filter === 'ladder' ? completed.filter(m => m.matchType !== 'friendly')
+    : completed.filter(m => m.matchType === 'friendly');
+
   const ranked = rank(players);
   const getRank = (id) => ranked.findIndex(p => p.id === id) + 1;
 
-  if (completed.length === 0) return (
-    <div className="text-[12px] text-center py-4" style={{ color: C.inkMute }}>No matches played yet</div>
-  );
-
   return (
-    <div className="space-y-2">
-      {completed.map(m => {
-        const winner = find(players, m.winnerId);
-        const loserId = m.a === m.winnerId ? m.b : m.a;
-        const loser = find(players, loserId);
-        if (!winner || !loser) return null;
-        const wRank = getRank(winner.id);
-        const lRank = getRank(loser.id);
-        return (
-          <div key={m.id} className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}` }}>
-            {/* Date + score on one line */}
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] uppercase tracking-[0.2em]" style={{ color: C.inkMute }}>{fmtDate(m.date)}</span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink, background: C.parchmentWarm, whiteSpace: 'nowrap' }}>{m.score}</span>
-            </div>
-            {/* Players row */}
-            <div className="flex items-center justify-between gap-2">
-              {/* Winner */}
-              <button onClick={() => onViewProfile(winner)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                {winner.profileImage
-                  ? <img src={winner.profileImage} alt={winner.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${C.win}` }} />
-                  : <Avatar name={winner.name} size={36} />
-                }
-                <div className="text-left min-w-0">
-                  <div className="font-semibold truncate" style={{ fontSize: 12, fontFamily: '"Fraunces", serif', color: C.ink }}>{winner.name}</div>
-                  <div style={{ fontSize: 10, color: C.win, fontWeight: 700 }}>#{wRank} · W</div>
-                </div>
-              </button>
+    <div>
+      {/* Filter pills */}
+      <div className="flex gap-1.5 mb-3">
+        {['all', 'ladder', 'friendly'].map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            className="text-[10px] uppercase tracking-[0.12em] font-bold px-3 py-1 rounded-full"
+            style={{ background: filter === f ? C.ink : C.parchmentWarm, color: filter === f ? C.parchment : C.inkMute, border: 'none', cursor: 'pointer' }}>
+            {f}
+          </button>
+        ))}
+      </div>
 
-              <div className="text-[10px] font-bold flex-shrink-0" style={{ color: C.line }}>vs</div>
-
-              {/* Loser */}
-              <button onClick={() => onViewProfile(loser)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
-                <div className="text-right min-w-0">
-                  <div className="font-semibold truncate" style={{ fontSize: 12, fontFamily: '"Fraunces", serif', color: C.ink }}>{loser.name}</div>
-                  <div style={{ fontSize: 10, color: C.loss, fontWeight: 700 }}>#{lRank} · L</div>
+      {visible.length === 0 && (
+        <div className="text-[12px] text-center py-4" style={{ color: C.inkMute }}>No matches found</div>
+      )}
+      <div className="space-y-2">
+        {visible.map(m => {
+          const winner = find(players, m.winnerId);
+          const loserId = m.a === m.winnerId ? m.b : m.a;
+          const loser = find(players, loserId);
+          if (!winner || !loser) return null;
+          const wRank = getRank(winner.id);
+          const lRank = getRank(loser.id);
+          const isFriendly = m.matchType === 'friendly';
+          return (
+            <div key={m.id} className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.82)', border: `1px solid ${C.line}`, borderLeft: `3px solid ${isFriendly ? C.greenMid : C.clay}` }}>
+              {/* Date + type + score on one line */}
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] uppercase tracking-[0.2em]" style={{ color: C.inkMute }}>{fmtDate(m.date)}</span>
+                  {isFriendly && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: C.greenMid, color: 'white' }}>Friendly</span>}
                 </div>
-                {loser.profileImage
-                  ? <img src={loser.profileImage} alt={loser.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${C.loss}` }} />
-                  : <Avatar name={loser.name} size={36} />
-                }
-              </button>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink, background: C.parchmentWarm, whiteSpace: 'nowrap' }}>{m.score}</span>
+              </div>
+              {/* Players row */}
+              <div className="flex items-center justify-between gap-2">
+                <button onClick={() => onViewProfile(winner)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                  {winner.profileImage
+                    ? <img src={winner.profileImage} alt={winner.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${C.win}` }} />
+                    : <Avatar name={winner.name} size={36} />
+                  }
+                  <div className="text-left min-w-0">
+                    <div className="font-semibold truncate" style={{ fontSize: 12, fontFamily: '"Fraunces", serif', color: C.ink }}>{winner.name}</div>
+                    <div style={{ fontSize: 10, color: C.win, fontWeight: 700 }}>{!isFriendly && `#${wRank} · `}W</div>
+                  </div>
+                </button>
+                <div className="text-[10px] font-bold flex-shrink-0" style={{ color: C.line }}>vs</div>
+                <button onClick={() => onViewProfile(loser)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+                  <div className="text-right min-w-0">
+                    <div className="font-semibold truncate" style={{ fontSize: 12, fontFamily: '"Fraunces", serif', color: C.ink }}>{loser.name}</div>
+                    <div style={{ fontSize: 10, color: C.loss, fontWeight: 700 }}>{!isFriendly && `#${lRank} · `}L</div>
+                  </div>
+                  {loser.profileImage
+                    ? <img src={loser.profileImage} alt={loser.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${C.loss}` }} />
+                    : <Avatar name={loser.name} size={36} />
+                  }
+                </button>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -2708,6 +2744,247 @@ function ActivityView({ matches, players, onViewProfile }) {
 /* ============================================================
    BOTTOM TABS
    ============================================================ */
+function FriendlyMatchModal({ players, myId, onClose, onSubmit }) {
+  const [opponentId, setOpponentId] = useState('');
+  const [search, setSearch] = useState('');
+  const [sets, setSets] = useState([{ a: 0, b: 0 }, { a: 0, b: 0 }, null]);
+  const [thirdSetType, setThirdSetType] = useState('full');
+  const [tiebreaks, setTiebreaks] = useState({ 0: null, 1: null });
+
+  const me = find(players, myId);
+  const opponent = find(players, opponentId);
+  const otherPlayers = players.filter(p => p.id !== myId && p.isActive !== false);
+  const filtered = search ? otherPlayers.filter(p => p.name.toLowerCase().includes(search.toLowerCase())) : otherPlayers;
+
+  const updateSet = (idx, who, val) => {
+    const is3rdTiebreak = idx === 2 && thirdSetType === 'tiebreak';
+    const maxVal = is3rdTiebreak ? 10 : 7;
+    const v = Math.max(0, Math.min(maxVal, Number(val)));
+    const newSets = [...sets];
+    if (!newSets[idx]) newSets[idx] = { a: 0, b: 0 };
+    const updated = { ...newSets[idx], [who]: v };
+    newSets[idx] = updated;
+    setSets(newSets);
+    if (!is3rdTiebreak && !(updated.a === 6 && updated.b === 6)) {
+      setTiebreaks(prev => ({ ...prev, [idx]: null }));
+    }
+  };
+
+  const updateTiebreak = (idx, who, val) => {
+    setTiebreaks(prev => ({
+      ...prev,
+      [idx]: { ...(prev[idx] || { a: 0, b: 0 }), [who]: Math.max(0, Number(val)) },
+    }));
+  };
+
+  const validSets = sets.filter(s => s !== null);
+
+  const setWinner = (s, idx) => {
+    if (!s) return null;
+    if (s.a === 6 && s.b === 6) {
+      const tb = tiebreaks[idx];
+      if (!tb) return null;
+      if (tb.a >= 7 && tb.a - tb.b >= 2) return 'a';
+      if (tb.b >= 7 && tb.b - tb.a >= 2) return 'b';
+      return null;
+    }
+    if (s.a > s.b) return 'a';
+    if (s.b > s.a) return 'b';
+    return null;
+  };
+
+  const setsWonA = validSets.filter((s, i) => setWinner(s, i) === 'a').length;
+  const setsWonB = validSets.filter((s, i) => setWinner(s, i) === 'b').length;
+  const winnerSide = setsWonA > setsWonB ? 'a' : setsWonB > setsWonA ? 'b' : null;
+  const winnerId = winnerSide === 'a' ? myId : winnerSide === 'b' ? opponentId : null;
+
+  const w1 = setWinner(sets[0], 0);
+  const w2 = setWinner(sets[1], 1);
+  const firstTwoSplit = w1 && w2 && w1 !== w2;
+
+  useEffect(() => {
+    if (!firstTwoSplit && sets[2] !== null) {
+      setSets(prev => { const n = [...prev]; n[2] = null; return n; });
+    }
+  }, [firstTwoSplit]);
+
+  const resolvedSets = validSets.map((s, i) => {
+    if (s.a === 6 && s.b === 6) {
+      const w = setWinner(s, i);
+      if (w === 'a') return { a: 7, b: 6 };
+      if (w === 'b') return { a: 6, b: 7 };
+    }
+    return s;
+  });
+
+  const scoreStr = validSets.map((s, idx) => {
+    if (idx === 2 && thirdSetType === 'tiebreak') return `[${s.a}-${s.b}]`;
+    if (s.a === 6 && s.b === 6) {
+      const tb = tiebreaks[idx];
+      return tb ? `7-6 (${Math.max(tb.a, tb.b)})` : '7-6';
+    }
+    return `${s.a}-${s.b}`;
+  }).join(', ');
+
+  const regularOpts = [0,1,2,3,4,5,6,7];
+  const tbOpts = [0,1,2,3,4,5,6,7,8,9,10,11,12];
+  const longTbOpts = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+
+  const nameA = me?.name?.split(' ')[0] || 'You';
+  const nameB = opponent?.name?.split(' ')[0] || 'Opponent';
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-1" style={{ color: C.green }}>
+        Friendly Match
+      </div>
+
+      {/* Opponent picker */}
+      {!opponentId ? (
+        <div className="mb-4">
+          <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, color: C.ink, marginBottom: 12 }}>Who did you play?</div>
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search players..."
+            style={{ width: '100%', padding: '10px 12px', border: `1.5px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm, color: C.ink, boxSizing: 'border-box', marginBottom: 8 }} />
+          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}`, maxHeight: 300, overflowY: 'auto' }}>
+            {filtered.map(p => (
+              <button key={p.id} onClick={() => setOpponentId(p.id)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
+                style={{ background: 'white', border: 'none', cursor: 'pointer', borderBottom: `1px solid ${C.line}` }}>
+                <Avatar name={p.name} size={28} />
+                <span style={{ fontSize: 14, color: C.ink, fontFamily: '"Fraunces", serif' }}>{p.name}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={onClose} className="w-full py-2.5 mt-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
+            style={{ border: `1px solid ${C.line}`, color: C.inkMute, background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+        </div>
+      ) : (
+        <>
+          <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, lineHeight: 1.1, color: C.ink }} className="mb-4">
+            {nameA} vs {nameB}
+            <button onClick={() => setOpponentId('')} style={{ marginLeft: 8, fontSize: 12, color: C.inkMute, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 400 }}>change</button>
+          </div>
+
+          {/* Player name headers */}
+          <div className="grid mb-1" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px' }}>
+            <div />
+            <div className="text-center text-[11px] uppercase tracking-[0.12em] font-bold truncate" style={{ color: C.clay }}>{nameA} ★</div>
+            <div />
+            <div className="text-center text-[11px] uppercase tracking-[0.12em] font-bold truncate" style={{ color: C.inkMute }}>{nameB}</div>
+            <div />
+          </div>
+
+          {/* Set rows */}
+          <div className="space-y-2 mb-3">
+            {sets.map((set, idx) => set === null ? null : (
+              <div key={idx}>
+                <div className="grid items-center gap-1" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px' }}>
+                  <div className="text-[10px] uppercase tracking-[0.1em] font-bold" style={{ color: C.inkMute }}>
+                    {idx === 2 && thirdSetType === 'tiebreak' ? 'TB' : `Set ${idx + 1}`}
+                  </div>
+                  <ScoreDropdown value={set.a} onChange={v => updateSet(idx, 'a', v)} highlight={setWinner(set, idx) === 'a'} options={idx === 2 && thirdSetType === 'tiebreak' ? tbOpts : regularOpts} />
+                  <div className="text-center font-bold" style={{ color: C.inkMute, fontFamily: '"JetBrains Mono", monospace', fontSize: 16 }}>–</div>
+                  <ScoreDropdown value={set.b} onChange={v => updateSet(idx, 'b', v)} highlight={setWinner(set, idx) === 'b'} options={idx === 2 && thirdSetType === 'tiebreak' ? tbOpts : regularOpts} />
+                  {idx === 2
+                    ? <button onClick={() => setSets(prev => { const n = [...prev]; n[2] = null; return n; })} style={{ color: C.inkMute, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}><X size={14} /></button>
+                    : <div />
+                  }
+                </div>
+
+                {set.a === 6 && set.b === 6 && !(idx === 2 && thirdSetType === 'tiebreak') && (
+                  <div className="grid items-center gap-1 mt-1 px-1 py-2 rounded" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px', background: `${C.clay}12`, border: `1px solid ${C.clay}30` }}>
+                    <div className="text-[10px] uppercase tracking-[0.1em] font-bold" style={{ color: C.clay }}>TB</div>
+                    <ScoreDropdown value={tiebreaks[idx]?.a ?? 0} onChange={v => updateTiebreak(idx, 'a', v)} highlight={(() => { const tb = tiebreaks[idx]; return !!(tb && tb.a >= 7 && tb.a - tb.b >= 2); })()} options={longTbOpts} />
+                    <div className="text-center font-bold" style={{ color: C.inkMute, fontFamily: '"JetBrains Mono", monospace', fontSize: 16 }}>–</div>
+                    <ScoreDropdown value={tiebreaks[idx]?.b ?? 0} onChange={v => updateTiebreak(idx, 'b', v)} highlight={(() => { const tb = tiebreaks[idx]; return !!(tb && tb.b >= 7 && tb.b - tb.a >= 2); })()} options={longTbOpts} />
+                    <div />
+                  </div>
+                )}
+
+                {idx === 2 && (
+                  <div className="flex gap-1 mt-2">
+                    {[{ id: 'full', label: 'Full set' }, { id: 'tiebreak', label: '10-pt TB' }].map(opt => (
+                      <button key={opt.id} onClick={() => setThirdSetType(opt.id)}
+                        className="flex-1 py-1.5 text-[10px] uppercase tracking-[0.1em] font-semibold rounded"
+                        style={{ background: thirdSetType === opt.id ? C.clay : 'transparent', color: thirdSetType === opt.id ? 'white' : C.inkMute, border: `1px solid ${thirdSetType === opt.id ? C.clay : C.line}` }}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {sets[2] === null && firstTwoSplit && (
+            <button onClick={() => setSets(prev => { const n = [...prev]; n[2] = { a: 0, b: 0 }; return n; })}
+              className="w-full py-2.5 mb-3 text-[11px] uppercase tracking-[0.15em] font-semibold rounded"
+              style={{ border: `1px dashed ${C.clay}`, color: C.clay }}>
+              + Add 3rd set
+            </button>
+          )}
+
+          {/* Winner preview */}
+          {winnerSide && (
+            <div className="rounded-lg p-3 mb-4 text-center" style={{ background: C.parchmentWarm, border: `1px solid ${C.line}` }}>
+              <div className="text-[9px] uppercase tracking-[0.2em] font-bold mb-1" style={{ color: C.inkMute }}>Winner</div>
+              <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 18, color: C.green }}>
+                {winnerSide === 'a' ? nameA : nameB} 🎾
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button onClick={onClose} className="flex-1 py-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]" style={{ border: `1px solid ${C.line}`, color: C.inkMute }}>Cancel</button>
+            <button
+              onClick={() => { if (!winnerId) return; onSubmit({ opponentId, scoreStr, sets: resolvedSets, winnerId, date: new Date().toISOString().slice(0, 10) }); }}
+              className="flex-1 py-3 text-[12px] font-bold rounded uppercase tracking-[0.1em]"
+              style={{ background: winnerId ? C.green : C.line, color: 'white', cursor: winnerId ? 'pointer' : 'not-allowed' }}>
+              Log Match
+            </button>
+          </div>
+        </>
+      )}
+    </ModalShell>
+  );
+}
+
+function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit, onViewProfile }) {
+  const [sub, setSub] = useState('activity');
+
+  return (
+    <div>
+      <SectionHeading kicker="Los Feliz Tennis Club" title="Community" />
+
+      <div className="flex gap-1 mb-4 p-1 rounded-lg" style={{ background: C.parchmentWarm }}>
+        {[
+          { id: 'activity', label: 'Activity' },
+          { id: 'hitboard', label: 'Hit Board' },
+        ].map(t => (
+          <button
+            key={t.id}
+            onClick={() => setSub(t.id)}
+            className="flex-1 text-[11px] uppercase tracking-[0.12em] font-semibold py-2 rounded transition-all"
+            style={{
+              background: sub === t.id ? C.ink : 'transparent',
+              color: sub === t.id ? C.parchment : C.inkMute,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {sub === 'hitboard' && (
+        <HitBoard hitPosts={hitPosts} myId={myId} players={players} onPostHit={onPostHit} onClaimHit={onClaimHit} />
+      )}
+      {sub === 'activity' && (
+        <ActivityView matches={matches} players={players} onViewProfile={onViewProfile} />
+      )}
+    </div>
+  );
+}
+
 function BottomTabs({ tab, setTab, pendingCount }) {
   const PodiumIcon = () => (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -2769,11 +3046,24 @@ function BottomTabs({ tab, setTab, pendingCount }) {
     </svg>
   );
 
+  const CommunityIcon = () => (
+    <svg width="22" height="20" viewBox="0 0 22 20" fill="none">
+      {/* Tennis ball */}
+      <circle cx="11" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/>
+      <path d="M7 4.5 C8.5 6.5, 8.5 7.5, 7 9.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+      <path d="M15 4.5 C13.5 6.5, 13.5 7.5, 15 9.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+      {/* Chat bubbles */}
+      <path d="M3 13 Q2 13, 2 14.5 Q2 16, 3 16 L4 16 L4 17.5 L5.5 16 L9 16 Q10 16, 10 14.5 Q10 13, 9 13 Z" stroke="currentColor" strokeWidth="1.3" fill="currentColor" fillOpacity="0.2" strokeLinejoin="round"/>
+      <path d="M13 13 Q12 13, 12 14.5 Q12 16, 13 16 L16.5 16 L18 17.5 L18 16 L19 16 Q20 16, 20 14.5 Q20 13, 19 13 Z" stroke="currentColor" strokeWidth="1.3" fill="currentColor" fillOpacity="0.2" strokeLinejoin="round"/>
+    </svg>
+  );
+
   const tabs = [
-    { id: 'ladder',   label: 'Ladder',   icon: <PodiumIcon /> },
-    { id: 'matches',  label: 'Matches',  icon: <RacketsIcon />, badge: pendingCount },
-    { id: 'contacts', label: 'Contacts', icon: <ContactsIcon /> },
-    { id: 'profile',  label: 'Profile',  icon: <TennisBallIcon /> },
+    { id: 'ladder',    label: 'Ladder',    icon: <PodiumIcon /> },
+    { id: 'community', label: 'Community', icon: <CommunityIcon /> },
+    { id: 'matches',   label: 'Matches',   icon: <RacketsIcon />, badge: pendingCount },
+    { id: 'contacts',  label: 'Contacts',  icon: <ContactsIcon /> },
+    { id: 'profile',   label: 'Profile',   icon: <TennisBallIcon /> },
   ];
   return (
     <div
@@ -3005,6 +3295,7 @@ function PlayerDetailModal({ player, players, matches, myId, onClose }) {
    CHALLENGE MODAL
    ============================================================ */
 function ChallengeModal({ opponent, me, onClose, onSubmit }) {
+  const [matchType, setMatchType] = useState('ladder');
   const [date, setDate] = useState(() => {
     const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
     d.setMinutes(Math.round(d.getMinutes() / 15) * 15, 0, 0);
@@ -3024,6 +3315,24 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
       <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 600, fontSize: 24, lineHeight: 1.1, color: C.ink }} className="mb-4">
         vs {opponent.name}
       </div>
+
+      {/* Ladder / Friendly toggle */}
+      <div className="flex gap-1 mb-4 p-1 rounded-lg" style={{ background: C.parchmentWarm }}>
+        {[{ id: 'ladder', label: '🏆 Ladder' }, { id: 'friendly', label: '🎾 Friendly' }].map(t => (
+          <button key={t.id} onClick={() => setMatchType(t.id)}
+            className="flex-1 text-[11px] uppercase tracking-[0.12em] font-semibold py-2 rounded transition-all"
+            style={{ background: matchType === t.id ? C.ink : 'transparent', color: matchType === t.id ? C.parchment : C.inkMute, border: 'none', cursor: 'pointer' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {matchType === 'friendly' && (
+        <div className="mb-4 px-3 py-2 rounded text-[11px]" style={{ background: `${C.green}18`, color: C.green, border: `1px solid ${C.green}40` }}>
+          Friendly matches don't affect ladder rankings or points.
+        </div>
+      )}
+
       <div className="flex items-center gap-3 mb-4 p-3 rounded" style={{ background: C.parchmentWarm }}>
         <Avatar name={opponent.name} size={40} />
         <div className="flex-1">
@@ -3038,47 +3347,27 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
 
       <div className="space-y-3 mb-5">
         <div>
-          <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-1.5" style={{ color: C.inkMute }}>
-            When
-          </label>
-          <input
-            type="datetime-local"
-            value={date}
-            onChange={e => setDate(e.target.value)}
+          <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-1.5" style={{ color: C.inkMute }}>When</label>
+          <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)}
             className="w-full px-3 py-2.5 rounded text-sm"
-            style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }}
-          />
+            style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }} />
         </div>
         <div>
-          <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-1.5" style={{ color: C.inkMute }}>
-            Where
-          </label>
-          <select
-            value={location}
-            onChange={e => setLocation(e.target.value)}
+          <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Where</label>
+          <select value={location} onChange={e => setLocation(e.target.value)}
             className="w-full px-3 py-2.5 rounded text-sm"
-            style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }}
-          >
+            style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }}>
             {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
           {location === 'Other' && (
-            <input
-              type="text"
-              placeholder="Enter location..."
-              value={customLocation}
-              onChange={e => setCustomLocation(e.target.value)}
+            <input type="text" placeholder="Enter location..." value={customLocation} onChange={e => setCustomLocation(e.target.value)}
               className="w-full px-3 py-2.5 rounded text-sm mt-2"
-              style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }}
-            />
+              style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }} />
           )}
           {VENUE_BOOKING[location] && (
-            <a
-              href={VENUE_BOOKING[location]}
-              target="_blank"
-              rel="noopener noreferrer"
+            <a href={VENUE_BOOKING[location]} target="_blank" rel="noopener noreferrer"
               className="block mt-2 text-center text-[11px] font-semibold uppercase tracking-[0.1em] py-1.5 rounded"
-              style={{ color: C.clay, border: `1px solid ${C.clay}`, textDecoration: 'none' }}
-            >
+              style={{ color: C.clay, border: `1px solid ${C.clay}`, textDecoration: 'none' }}>
               📅 Book a court
             </a>
           )}
@@ -3086,18 +3375,13 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
       </div>
 
       <div className="flex gap-2">
-        <button
-          onClick={onClose}
-          className="flex-1 py-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
-          style={{ border: `1px solid ${C.line}`, color: C.inkMute }}
-        >
+        <button onClick={onClose} className="flex-1 py-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
+          style={{ border: `1px solid ${C.line}`, color: C.inkMute }}>
           Cancel
         </button>
-        <button
-          onClick={() => onSubmit({ opponentId: opponent.id, date, location: finalLocation })}
+        <button onClick={() => onSubmit({ opponentId: opponent.id, date, location: finalLocation, matchType })}
           className="flex-1 py-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
-          style={{ background: C.clay, color: 'white' }}
-        >
+          style={{ background: matchType === 'friendly' ? C.green : C.clay, color: 'white' }}>
           Send Challenge
         </button>
       </div>
