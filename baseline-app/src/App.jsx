@@ -3047,14 +3047,38 @@ function BottomTabs({ tab, setTab, pendingCount }) {
   );
 
   const CommunityIcon = () => (
-    <svg width="22" height="20" viewBox="0 0 22 20" fill="none">
-      {/* Tennis ball */}
-      <circle cx="11" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/>
-      <path d="M7 4.5 C8.5 6.5, 8.5 7.5, 7 9.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
-      <path d="M15 4.5 C13.5 6.5, 13.5 7.5, 15 9.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
-      {/* Chat bubbles */}
-      <path d="M3 13 Q2 13, 2 14.5 Q2 16, 3 16 L4 16 L4 17.5 L5.5 16 L9 16 Q10 16, 10 14.5 Q10 13, 9 13 Z" stroke="currentColor" strokeWidth="1.3" fill="currentColor" fillOpacity="0.2" strokeLinejoin="round"/>
-      <path d="M13 13 Q12 13, 12 14.5 Q12 16, 13 16 L16.5 16 L18 17.5 L18 16 L19 16 Q20 16, 20 14.5 Q20 13, 19 13 Z" stroke="currentColor" strokeWidth="1.3" fill="currentColor" fillOpacity="0.2" strokeLinejoin="round"/>
+    <svg width="24" height="20" viewBox="0 0 24 20" fill="none">
+      {/* Left person head */}
+      <circle cx="4.5" cy="3.5" r="2" fill="currentColor"/>
+      {/* Left person body */}
+      <path d="M4.5 5.5 L4.5 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      {/* Left person legs */}
+      <path d="M4.5 12 L2.5 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M4.5 12 L6.5 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      {/* Left arms both raised */}
+      <path d="M4.5 7.5 L10 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M4.5 7.5 L2 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      {/* Left hand */}
+      <circle cx="10.5" cy="5.2" r="1.2" fill="currentColor"/>
+
+      {/* Net */}
+      <line x1="12" y1="8" x2="12" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="10.5" y1="10" x2="13.5" y2="10" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.4"/>
+      <line x1="10.5" y1="13" x2="13.5" y2="13" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.4"/>
+      <line x1="10.5" y1="16" x2="13.5" y2="16" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.4"/>
+
+      {/* Right hand */}
+      <circle cx="13.5" cy="5.2" r="1.2" fill="currentColor"/>
+      {/* Right arms both raised */}
+      <path d="M19.5 7.5 L14 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M19.5 7.5 L22 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      {/* Right person body */}
+      <path d="M19.5 5.5 L19.5 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      {/* Right person legs */}
+      <path d="M19.5 12 L17.5 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M19.5 12 L21.5 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      {/* Right person head */}
+      <circle cx="19.5" cy="3.5" r="2" fill="currentColor"/>
     </svg>
   );
 
@@ -3074,20 +3098,20 @@ function BottomTabs({ tab, setTab, pendingCount }) {
         paddingBottom: 'env(safe-area-inset-bottom, 12px)',
       }}
     >
-      <div className="flex justify-around px-2 pt-2 pb-1">
+      <div className="flex justify-around px-0 pt-2 pb-1">
         {tabs.map(t => {
           const active = tab === t.id;
           return (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className="relative flex flex-col items-center gap-1 px-4 py-2 transition-all"
-              style={{ color: active ? C.optic : 'rgba(255,255,255,0.4)' }}
+              className="relative flex flex-col items-center gap-0.5 px-1 py-1.5 transition-all flex-1"
+              style={{ color: active ? C.optic : 'rgba(255,255,255,0.4)', minWidth: 0 }}
             >
               {active && (
-                <div style={{ position: 'absolute', top: -2, left: '50%', transform: 'translateX(-50%)', width: 28, height: 3, background: C.optic, borderRadius: '0 0 3px 3px' }} />
+                <div style={{ position: 'absolute', top: -2, left: '50%', transform: 'translateX(-50%)', width: 24, height: 3, background: C.optic, borderRadius: '0 0 3px 3px' }} />
               )}
-              <div className="relative">
+              <div className="relative flex items-center justify-center" style={{ height: 24 }}>
                 {t.icon}
                 {t.badge > 0 && (
                   <span
@@ -3098,7 +3122,7 @@ function BottomTabs({ tab, setTab, pendingCount }) {
                   </span>
                 )}
               </div>
-              <span className="text-[9px] uppercase tracking-[0.18em] font-bold">
+              <span className="text-[8px] uppercase tracking-[0.08em] font-bold truncate w-full text-center">
                 {t.label}
               </span>
             </button>
