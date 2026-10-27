@@ -1643,7 +1643,7 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
           </div>
           <div>
             <div style={{ fontSize: 9, color: C.inkMute, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, lineHeight: 1 }}>W–L</div>
-            <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 13, color: C.ink, fontWeight: 700, lineHeight: 1.2 }}>{player.currentWins ?? player.wins}–{player.currentLosses ?? player.losses}</div>
+            <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 13, color: C.ink, fontWeight: 700, lineHeight: 1.2 }}>{player.currentWins ?? 0}–{player.currentLosses ?? 0}</div>
           </div>
           {player.recentForm && player.recentForm.length > 0 && (
             <div>
