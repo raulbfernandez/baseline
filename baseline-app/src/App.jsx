@@ -2285,17 +2285,17 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
       </div>
 
       {/* Sort + role filter chips */}
-      <div className="flex gap-2 mb-3 flex-wrap">
+      <div className="flex gap-2 mb-3" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', paddingBottom: 2 }}>
         {[{ id: 'name', label: 'Last Name' }, { id: 'points', label: 'Points' }].map(s => (
           <button key={s.id} onClick={() => setSortBy(s.id)} type="button"
-            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 10px', borderRadius: 20, border: `1px solid ${sortBy === s.id ? C.ink : C.line}`, background: sortBy === s.id ? C.ink : 'transparent', color: sortBy === s.id ? C.parchment : C.inkMute, cursor: 'pointer' }}>
+            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 10px', borderRadius: 20, border: `1px solid ${sortBy === s.id ? C.ink : C.line}`, background: sortBy === s.id ? C.ink : 'transparent', color: sortBy === s.id ? C.parchment : C.inkMute, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
             {s.label}
           </button>
         ))}
         <div style={{ width: 1, background: C.line, margin: '2px 0' }} />
         {[{ id: 'all', label: 'All' }, { id: 'member', label: 'Members' }, { id: 'guest', label: 'Guests' }].map(r => (
           <button key={r.id} onClick={() => setRoleFilter(r.id)} type="button"
-            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 10px', borderRadius: 20, border: `1px solid ${roleFilter === r.id ? C.clay : C.line}`, background: roleFilter === r.id ? `${C.clay}18` : 'transparent', color: roleFilter === r.id ? C.clay : C.inkMute, cursor: 'pointer' }}>
+            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 10px', borderRadius: 20, border: `1px solid ${roleFilter === r.id ? C.clay : C.line}`, background: roleFilter === r.id ? `${C.clay}18` : 'transparent', color: roleFilter === r.id ? C.clay : C.inkMute, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
             {r.label}
           </button>
         ))}
