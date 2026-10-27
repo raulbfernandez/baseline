@@ -853,23 +853,18 @@ export default function App() {
 
   const reset = async () => {
     try {
-      // Archive all completed matches by tagging them with the current season
-      const currentSeason = 1;
-      const completedMatchIds = matches.filter(m => m.status === 'completed').map(m => m.id);
-      if (completedMatchIds.length > 0) {
-        const archiveRes = await sb.from('matches').update({ season: currentSeason }).in('id', completedMatchIds);
-        if (archiveRes.error) throw new Error('Archive failed: ' + archiveRes.error.message);
-      }
-      // Delete all matches to start fresh — fetch IDs first then delete individually if bulk fails
-      const allMatchIds = matches.map(m => m.id);
-      if (allMatchIds.length > 0) {
-        const delRes = await sb.from('matches').delete().in('id', allMatchIds);
-        if (delRes.error) throw new Error('Delete matches failed: ' + delRes.error.message);
+      const mdb = await sb.from('matches');
+      const pdb = await sb.from('players');
+      // Archive completed matches with season=1, then delete all matches one by one
+      for (const m of matches) {
+        if (m.status === 'completed') {
+          await mdb.update({ season: 1 }, { id: m.id });
+        }
+        await mdb.delete({ id: m.id });
       }
       // Reset all player stats to zero, keep accounts and profile data intact
       for (const p of players) {
-        const upRes = await sb.from('players').update({ points: 1000, wins: 0, losses: 0, streak: 0 }).eq('id', p.id);
-        if (upRes.error) throw new Error('Player reset failed: ' + upRes.error.message);
+        await pdb.update({ points: 1000, wins: 0, losses: 0, streak: 0 }, { id: p.id });
       }
       // Update local state
       setMatches([]);
