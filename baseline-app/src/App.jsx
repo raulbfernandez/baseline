@@ -864,12 +864,12 @@ export default function App() {
       }
       // Reset all player stats to zero, keep accounts and profile data intact
       for (const p of players) {
-        await pdb.update({ points: 1000, wins: 0, losses: 0, streak: 0 }, { id: p.id });
+        await pdb.update({ points: 0, wins: 0, losses: 0, streak: 0 }, { id: p.id });
       }
       // Update local state
       setMatches([]);
       setDeletedMatchIds(new Set());
-      setPlayers(players.map(p => ({ ...p, points: 1000, wins: 0, losses: 0, streak: 0 })));
+      setPlayers(players.map(p => ({ ...p, points: 0, wins: 0, losses: 0, streak: 0 })));
       showToast('New season started — all stats reset');
     } catch (e) {
       console.error('Reset error:', e);
