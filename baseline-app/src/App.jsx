@@ -1278,6 +1278,7 @@ export default function App() {
       streakMap[p.id] = { wins, losses, recentForm, currentWins, currentLosses };
     });
     return [...players]
+      .filter(p => p.role === 'member' && p.isActive !== false)
       .sort((a, b) => {
         if (b.points !== a.points) return b.points - a.points;
         const aMatches = (streakMap[a.id]?.currentWins ?? 0) + (streakMap[a.id]?.currentLosses ?? 0);
@@ -1765,23 +1766,22 @@ function Avatar({ name, size = 32 }) {
       style={{ flexShrink: 0, borderRadius: '50%' }}
     >
       <circle cx="50" cy="50" r="50" fill={bg} />
-      {/* Left seam: curves from top-left to bottom-right */}
+      {/* Tennis ball seams — two horizontal arcs, one bowing up, one bowing down */}
       <path
-        d="M 18 8 C 38 8, 62 35, 62 50 C 62 65, 38 92, 18 92"
+        d="M 8 38 C 28 28, 72 28, 92 38"
         fill="none"
         stroke={C.clayDeep}
-        strokeWidth="5"
+        strokeWidth="5.5"
         strokeLinecap="round"
-        opacity="0.22"
+        opacity="0.28"
       />
-      {/* Right seam: mirror */}
       <path
-        d="M 82 8 C 62 8, 38 35, 38 50 C 38 65, 62 92, 82 92"
+        d="M 8 62 C 28 72, 72 72, 92 62"
         fill="none"
         stroke={C.clayDeep}
-        strokeWidth="5"
+        strokeWidth="5.5"
         strokeLinecap="round"
-        opacity="0.22"
+        opacity="0.28"
       />
       <text
         x="50" y="50"
