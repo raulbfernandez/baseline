@@ -1335,6 +1335,7 @@ export default function App() {
           )}
           {tab === 'community' && (
             <CommunityView
+              isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onToggleActive={togglePlayerActive} onToggleRole={toggleRole}
               hitPosts={hitPosts}
               matches={matches}
               players={players}
@@ -1344,9 +1345,7 @@ export default function App() {
               onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })}
             />
           )}
-          {tab === 'contacts' && (
-            <ContactsView players={players} myId={currentUserId} isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onToggleRole={toggleRole} />
-          )}
+
           {tab === 'profile' && (
             <ProfileView me={me} myRank={myRank} matches={matches} players={players} onChangePassword={changePassword} onUpdateProfile={updateProfile} onDeleteMatch={deleteMatch} isAdmin={isAdmin()} onReset={reset} onSignOut={handleSignOut} onAddPlayer={() => setModal({ kind: 'addPlayer' })} onApprove={approvePlayer} onAdminMatch={() => setModal({ kind: 'adminMatch' })} />
           )}
@@ -3549,7 +3548,7 @@ function FriendlyMatchModal({ players, myId, onClose, onSubmit }) {
   );
 }
 
-function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit, onViewProfile }) {
+function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit, onViewProfile, isAdmin, canManagePasswords, onResetPassword, onToggleActive, onToggleRole }) {
   const [sub, setSub] = useState('activity');
 
   return (
@@ -3560,6 +3559,7 @@ function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit
         {[
           { id: 'activity', label: 'Activity' },
           { id: 'hitboard', label: 'Hit Board' },
+          { id: 'players', label: 'Players' },
         ].map(t => (
           <button
             key={t.id}
@@ -3580,6 +3580,9 @@ function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit
       )}
       {sub === 'activity' && (
         <ActivityView matches={matches} players={players} onViewProfile={onViewProfile} />
+      )}
+      {sub === 'players' && (
+        <ContactsView players={players} myId={myId} isAdmin={isAdmin} canManagePasswords={canManagePasswords} onResetPassword={onResetPassword} onViewProfile={onViewProfile} onToggleActive={onToggleActive} onToggleRole={onToggleRole} />
       )}
     </div>
   );
@@ -3686,7 +3689,6 @@ function BottomTabs({ tab, setTab, pendingCount }) {
     { id: 'ladder',    label: 'Ladder',    icon: <PodiumIcon /> },
     { id: 'community', label: 'Community', icon: <CommunityIcon /> },
     { id: 'matches',   label: 'Matches',   icon: <RacketsIcon />, badge: pendingCount },
-    { id: 'contacts',  label: 'Contacts',  icon: <ContactsIcon /> },
     { id: 'profile',   label: 'Profile',   icon: <TennisBallIcon /> },
   ];
   return (
