@@ -2159,12 +2159,14 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
   const [showInactive, setShowInactive] = useState(false);
   
   // Filter players based on search and active status
-  const filtered = players.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.email && p.email.toLowerCase().includes(search.toLowerCase()));
-    const matchesActive = (isAdmin && showInactive) || p.isActive !== false;
-    return matchesSearch && matchesActive;
-  });
+  const filtered = players
+    .filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.email && p.email.toLowerCase().includes(search.toLowerCase()));
+      const matchesActive = (isAdmin && showInactive) || p.isActive !== false;
+      return matchesSearch && matchesActive;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const inactiveCount = players.filter(p => p.isActive === false).length;
 
