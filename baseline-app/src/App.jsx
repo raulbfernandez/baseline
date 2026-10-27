@@ -1368,7 +1368,11 @@ export default function App() {
         if (b.points !== a.points) return b.points - a.points;
         const aMatches = (streakMap[a.id]?.currentWins ?? 0) + (streakMap[a.id]?.currentLosses ?? 0);
         const bMatches = (streakMap[b.id]?.currentWins ?? 0) + (streakMap[b.id]?.currentLosses ?? 0);
-        return bMatches - aMatches;
+        if (bMatches !== aMatches) return bMatches - aMatches;
+        // Final tiebreaker: alphabetical by last name
+        const aLast = (a.name || '').trim().split(' ').pop().toLowerCase();
+        const bLast = (b.name || '').trim().split(' ').pop().toLowerCase();
+        return aLast.localeCompare(bLast);
       })
       .map(p => ({
         ...p,
