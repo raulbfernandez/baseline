@@ -418,7 +418,7 @@ function RequestToJoinScreen({ onBack }) {
 
       <div className="w-full max-w-sm relative">
         <div className="flex justify-center" style={{ position: 'relative', zIndex: 2, marginBottom: 24 }}>
-          <BaselineLogo size={103} />
+          <BaselineLogo size={72} />
         </div>
 
         <div className="rounded-xl p-6" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
@@ -538,7 +538,7 @@ function LoginScreen({ players, passwords, onLogin }) {
       <div className="w-full max-w-sm relative">
         {/* Logo floats above card */}
         <div className="flex justify-center" style={{ position: 'relative', zIndex: 2, marginBottom: 24 }}>
-          <BaselineLogo size={103} />
+          <BaselineLogo size={72} />
         </div>
 
         <div className="rounded-xl p-6" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
