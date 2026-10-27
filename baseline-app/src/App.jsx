@@ -856,15 +856,12 @@ export default function App() {
 
   const reset = async () => {
     try {
-      const mdb = await sb.from('matches');
       const pdb = await sb.from('players');
-      // Archive completed matches with season=1, then delete all matches one by one
-      for (const m of matches) {
-        if (m.status === 'completed') {
-          await mdb.update({ season: 1 }, { id: m.id });
-        }
-        await mdb.delete({ id: m.id });
-      }
+      // Delete all matches in one query
+      await fetch(`${SUPABASE_URL}/rest/v1/matches?id=neq.___none___`, {
+        method: 'DELETE',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }
+      });
       // Reset all player stats to zero, keep accounts and profile data intact
       for (const p of players) {
         await pdb.update({ points: 0, wins: 0, losses: 0, streak: 0 }, { id: p.id });
