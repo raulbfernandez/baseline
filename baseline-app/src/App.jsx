@@ -1335,7 +1335,7 @@ export default function App() {
           )}
           {tab === 'community' && (
             <CommunityView
-              isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onToggleActive={togglePlayerActive} onToggleRole={toggleRole}
+              isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onToggleActive={togglePlayerActive} onToggleRole={toggleRole} onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })}
               hitPosts={hitPosts}
               matches={matches}
               players={players}
@@ -2220,7 +2220,7 @@ function MatchCard({ match, players, myId, onAccept, onDecline, onCancel, onRepo
 /* ============================================================
    CONTACTS VIEW
    ============================================================ */
-function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassword, onViewProfile, onToggleActive, onToggleRole }) {
+function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassword, onViewProfile, onToggleActive, onToggleRole, onChallenge }) {
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   
@@ -2359,6 +2359,17 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
                 <a href={`tel:${p.phone}`} className="text-[12px]" style={{ color: C.inkMute }}>
                   {p.phone}
                 </a>
+              </div>
+            )}
+            {onChallenge && p.id !== myId && p.isActive !== false && (
+              <div className="mt-2">
+                <button
+                  onClick={() => onChallenge(p)}
+                  type="button"
+                  style={{ width: '100%', padding: '7px 0', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', borderRadius: 6, background: C.clay, color: 'white', border: 'none', cursor: 'pointer' }}
+                >
+                  Challenge
+                </button>
               </div>
             )}
             {(isAdmin || canManagePasswords) && p.id !== myId && (
@@ -3560,7 +3571,7 @@ function FriendlyMatchModal({ players, myId, onClose, onSubmit }) {
   );
 }
 
-function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit, onViewProfile, isAdmin, canManagePasswords, onResetPassword, onToggleActive, onToggleRole }) {
+function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit, onViewProfile, isAdmin, canManagePasswords, onResetPassword, onToggleActive, onToggleRole, onChallenge }) {
   const [sub, setSub] = useState('activity');
 
   return (
@@ -3594,7 +3605,7 @@ function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit
         <ActivityView matches={matches} players={players} onViewProfile={onViewProfile} />
       )}
       {sub === 'players' && (
-        <ContactsView players={players} myId={myId} isAdmin={isAdmin} canManagePasswords={canManagePasswords} onResetPassword={onResetPassword} onViewProfile={onViewProfile} onToggleActive={onToggleActive} onToggleRole={onToggleRole} />
+        <ContactsView players={players} myId={myId} isAdmin={isAdmin} canManagePasswords={canManagePasswords} onResetPassword={onResetPassword} onViewProfile={onViewProfile} onToggleActive={onToggleActive} onToggleRole={onToggleRole} onChallenge={onChallenge} />
       )}
     </div>
   );
