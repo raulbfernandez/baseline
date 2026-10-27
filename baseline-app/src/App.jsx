@@ -406,7 +406,7 @@ function RequestToJoinScreen({ onBack }) {
 
       <div className="w-full max-w-sm relative">
         <div className="flex justify-center mb-8">
-          <BaselineLogo size={52} />
+          <BaselineLogo size={103} />
         </div>
 
         <div className="rounded-xl p-6" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
@@ -526,7 +526,7 @@ function LoginScreen({ players, passwords, onLogin }) {
       <div className="w-full max-w-sm relative">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <BaselineLogo size={52} />
+          <BaselineLogo size={103} />
         </div>
 
         <div className="rounded-xl p-6" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
@@ -1314,7 +1314,7 @@ function Header() {
         </svg>
         <div className="absolute inset-0 flex items-center pointer-events-none" style={{ left: '3%', width: '47%' }}>
           <div className="w-full flex justify-center">
-            <BaselineLogo size={36} />
+            <BaselineLogo size={100} />
           </div>
         </div>
         <div style={{ height: 36 }} />
