@@ -853,38 +853,29 @@ export default function App() {
 
   const reset = async () => {
     try {
-      // Re-seed players
-      const seeds = seedPlayers();
-      const pdb = await sb.from('players');
-      await pdb.upsert(seeds.map(p => ({
-        id: p.id, name: p.name, email: p.email, phone: p.phone,
-        gender: p.gender, points: p.points, wins: p.wins, losses: p.losses,
-        streak: p.streak, usta_rating: null, profile_image: null, is_active: true,
-      })));
-      // Re-seed matches
-      const mseeds = seedMatches();
-      const mdb = await sb.from('matches');
-      await mdb.upsert(mseeds.map(m => ({
-        id: m.id, player_a: m.a, player_b: m.b, status: m.status,
-        winner_id: m.winnerId || null, score: m.score || null, sets: m.sets || null,
-        proposed_date: null, location: m.location || null,
-        winner_change: m.winnerChange || null, loser_change: m.loserChange || null,
-        change_pts: m.change || null, match_date: m.date || null,
-      })));
-      // Clear passwords
-      const pwdb = await sb.from('passwords');
-      // Can't bulk delete easily — just reset state
-      setPlayers(seeds);
-      setMatches(mseeds);
-      setPasswords({});
+      // Archive all completed matches by tagging them with the current season
+      const currentSeason = 1;
+      const completedMatchIds = matches.filter(m => m.status === 'completed').map(m => m.id);
+      if (completedMatchIds.length > 0) {
+        await sb.from('matches').update({ season: currentSeason }).in('id', completedMatchIds);
+      }
+      // Delete all matches (archived + pending/scheduled) to start fresh
+      await sb.from('matches').delete().neq('id', '__none__');
+      // Reset all player stats to zero, keep accounts and profile data intact
+      const resetStats = players.map(p => ({
+        id: p.id, points: 1000, wins: 0, losses: 0, streak: 0,
+      }));
+      for (const s of resetStats) {
+        await sb.from('players').update({ points: s.points, wins: s.wins, losses: s.losses, streak: s.streak }).eq('id', s.id);
+      }
+      // Update local state
+      setMatches([]);
       setDeletedMatchIds(new Set());
-      setLoggedIn(false);
-      setCurrentUserId(null);
-      localStorage.removeItem(SESSION_KEY);
-      showToast('Reset to fresh ladder');
+      setPlayers(players.map(p => ({ ...p, points: 1000, wins: 0, losses: 0, streak: 0 })));
+      showToast('New season started — all stats reset');
     } catch (e) {
       console.error('Reset error:', e);
-      showToast('Reset failed');
+      showToast('Season reset failed');
     }
   };
 
@@ -2533,10 +2524,10 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
       {isAdmin && (
         <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
           <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-3" style={{ color: C.inkMute }}>Admin</div>
-          <button onClick={() => { if (window.confirm && !window.confirm('Reset ladder to defaults? This cannot be undone.')) return; onReset(); }}
+          <button onClick={() => { if (window.confirm && !window.confirm('Start a new season? This will archive all match history and reset everyone\'s stats to zero. Player accounts are kept. This cannot be undone.')) return; onReset(); }}
             className="w-full py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
             style={{ border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
-            Reset Ladder to Defaults
+            Start New Season
           </button>
         </div>
       )}
