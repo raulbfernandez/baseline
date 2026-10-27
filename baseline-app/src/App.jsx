@@ -366,6 +366,18 @@ function RequestToJoinScreen({ onBack }) {
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
     setLoading(true);
     try {
+      // Create player in DB as pending
+      const db = await sb.from('players');
+      await db.upsert([{
+        name: fullName,
+        email: email.toLowerCase().trim(),
+        phone: phone.trim(),
+        usta_rating: usta || null,
+        points: 0, wins: 0, losses: 0, streak: 0,
+        is_active: false,
+        role: 'pending',
+      }]);
+      // Also send email notification
       await sendEmail({
         to: 'raulbfernandez@gmail.com',
         subject: `🎾 New Join Request: ${fullName}`,
@@ -908,6 +920,19 @@ export default function App() {
     return me && ADMINS.includes(me.email.toLowerCase());
   };
 
+  const approvePlayer = async (playerId, role) => {
+    const player = find(players, playerId);
+    try {
+      const db = await sb.from('players');
+      await db.update({ role, is_active: true }, { id: playerId });
+      setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, role, isActive: true } : p));
+      showToast(`${player?.name} approved as ${role}`);
+    } catch (e) {
+      console.error('Approve player error:', e);
+      showToast('Error approving player');
+    }
+  };
+
   const addPlayer = async ({ name, email, phone, ustaRating }) => {
     try {
       const db = await sb.from('players');
@@ -1323,7 +1348,7 @@ export default function App() {
             <ContactsView players={players} myId={currentUserId} isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onToggleRole={toggleRole} />
           )}
           {tab === 'profile' && (
-            <ProfileView me={me} myRank={myRank} matches={matches} players={players} onChangePassword={changePassword} onUpdateProfile={updateProfile} onDeleteMatch={deleteMatch} isAdmin={isAdmin()} onReset={reset} onSignOut={handleSignOut} onAddPlayer={() => setModal({ kind: 'addPlayer' })} />
+            <ProfileView me={me} myRank={myRank} matches={matches} players={players} onChangePassword={changePassword} onUpdateProfile={updateProfile} onDeleteMatch={deleteMatch} isAdmin={isAdmin()} onReset={reset} onSignOut={handleSignOut} onAddPlayer={() => setModal({ kind: 'addPlayer' })} onApprove={approvePlayer} />
           )}
         </div>
       </div>
@@ -2463,7 +2488,7 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
 }
 
 
-function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut, onAddPlayer }) {
+function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut, onAddPlayer, onApprove }) {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -2705,6 +2730,34 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
       {isAdmin && (
         <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
           <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-3" style={{ color: C.inkMute }}>Admin</div>
+
+          {/* Pending join requests */}
+          {players.filter(p => p.role === 'pending').length > 0 && (
+            <div className="mb-4">
+              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-2" style={{ color: C.clay }}>
+                Pending Requests ({players.filter(p => p.role === 'pending').length})
+              </div>
+              {players.filter(p => p.role === 'pending').map(p => (
+                <div key={p.id} className="rounded-lg p-3 mb-2" style={{ background: 'rgba(205,93,53,0.06)', border: `1px solid rgba(205,93,53,0.2)` }}>
+                  <div className="font-semibold text-[14px] mb-0.5" style={{ color: C.ink }}>{p.name}</div>
+                  <div className="text-[12px] mb-2" style={{ color: C.inkMute }}>{p.email}{p.ustaRating ? ` · USTA ${p.ustaRating}` : ''}</div>
+                  <div className="flex gap-2">
+                    <button onClick={() => onApprove(p.id, 'guest')}
+                      className="flex-1 py-1.5 text-[11px] font-semibold rounded uppercase tracking-[0.08em]"
+                      style={{ background: 'transparent', border: `1px solid ${C.inkMute}`, color: C.inkMute, cursor: 'pointer' }}>
+                      Approve as Guest
+                    </button>
+                    <button onClick={() => onApprove(p.id, 'member')}
+                      className="flex-1 py-1.5 text-[11px] font-semibold rounded uppercase tracking-[0.08em]"
+                      style={{ background: C.forest, border: 'none', color: 'white', cursor: 'pointer' }}>
+                      Approve as Member
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button onClick={onAddPlayer}
             className="w-full py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em] mb-2"
             style={{ border: `1px solid ${C.forest}`, color: C.forest, background: 'transparent', cursor: 'pointer' }}>
