@@ -1755,23 +1755,43 @@ function Avatar({ name, size = 32 }) {
   const bg = '#F5C842';
   const text = initials(name);
   const r = size / 2;
+  // Tennis ball seam curves — two S-curves crossing the circle
+  // Scaled to any size via viewBox 0 0 100 100
   return (
     <svg
       width={size}
       height={size}
-      viewBox={`0 0 ${size} ${size}`}
+      viewBox="0 0 100 100"
       style={{ flexShrink: 0, borderRadius: '50%' }}
     >
-      <circle cx={r} cy={r} r={r} fill={bg} />
+      <circle cx="50" cy="50" r="50" fill={bg} />
+      {/* Left seam: curves from top-left to bottom-right */}
+      <path
+        d="M 18 8 C 38 8, 62 35, 62 50 C 62 65, 38 92, 18 92"
+        fill="none"
+        stroke={C.clayDeep}
+        strokeWidth="5"
+        strokeLinecap="round"
+        opacity="0.22"
+      />
+      {/* Right seam: mirror */}
+      <path
+        d="M 82 8 C 62 8, 38 35, 38 50 C 38 65, 62 92, 82 92"
+        fill="none"
+        stroke={C.clayDeep}
+        strokeWidth="5"
+        strokeLinecap="round"
+        opacity="0.22"
+      />
       <text
-        x="50%" y="50%"
+        x="50" y="50"
         dominantBaseline="central"
         textAnchor="middle"
         fill={C.clayDeep}
-        fontSize={size * 0.38}
+        fontSize="38"
         fontFamily='"Fraunces", serif'
         fontWeight="700"
-        letterSpacing="0.03em"
+        letterSpacing="2"
       >
         {text}
       </text>
