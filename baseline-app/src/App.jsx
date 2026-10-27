@@ -682,17 +682,18 @@ export default function App() {
               season: m.season,
             })));
         } else {
-          // Seed matches
-          const seeds = seedMatches();
+          // No matches — fresh season, nothing to seed
+          setMatches([]);
+          if (false) { // seed disabled
           const mdb2 = await sb.from('matches');
-          await mdb2.upsert(seeds.map(m => ({
+          await mdb2.upsert([].map(m => ({
             id: m.id, player_a: m.a, player_b: m.b, status: m.status,
             winner_id: m.winnerId || null, score: m.score || null, sets: m.sets || null,
             proposed_date: m.proposedDate || null, location: m.location || null,
             winner_change: m.winnerChange || null, loser_change: m.loserChange || null,
             change_pts: m.change || null, match_date: m.date || null,
           })));
-          setMatches(seeds);
+          } // end if (false)
         }
 
         // Load passwords
