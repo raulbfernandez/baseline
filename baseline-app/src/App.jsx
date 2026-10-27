@@ -908,6 +908,37 @@ export default function App() {
     return me && ADMINS.includes(me.email.toLowerCase());
   };
 
+  const addPlayer = async ({ name, email, phone, ustaRating }) => {
+    try {
+      const db = await sb.from('players');
+      const newPlayer = {
+        name,
+        email: email.toLowerCase().trim(),
+        phone: phone || null,
+        usta_rating: ustaRating || null,
+        points: 0, wins: 0, losses: 0, streak: 0,
+        is_active: true,
+        role: 'member',
+      };
+      const result = await db.upsert([newPlayer]);
+      // Reload players from DB to get the new ID
+      const pdb = await sb.from('players');
+      const rows = await pdb.select();
+      if (rows && rows.length) {
+        setPlayers(rows.map(p => ({
+          id: p.id, name: p.name, email: p.email, phone: p.phone,
+          gender: p.gender, points: p.points, wins: p.wins, losses: p.losses,
+          streak: p.streak, ustaRating: p.usta_rating, profileImage: p.profile_image,
+          isActive: p.is_active, role: p.role || 'member',
+        })));
+      }
+      showToast(`${name} added to the ladder`);
+    } catch (e) {
+      console.error('Add player error:', e);
+      showToast('Error adding player');
+    }
+  };
+
   const toggleRole = async (playerId) => {
     const player = find(players, playerId);
     const newRole = player?.role === 'guest' ? 'member' : 'guest';
@@ -1292,7 +1323,7 @@ export default function App() {
             <ContactsView players={players} myId={currentUserId} isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onToggleRole={toggleRole} />
           )}
           {tab === 'profile' && (
-            <ProfileView me={me} myRank={myRank} matches={matches} players={players} onChangePassword={changePassword} onUpdateProfile={updateProfile} onDeleteMatch={deleteMatch} isAdmin={isAdmin()} onReset={reset} onSignOut={handleSignOut} />
+            <ProfileView me={me} myRank={myRank} matches={matches} players={players} onChangePassword={changePassword} onUpdateProfile={updateProfile} onDeleteMatch={deleteMatch} isAdmin={isAdmin()} onReset={reset} onSignOut={handleSignOut} onAddPlayer={() => setModal({ kind: 'addPlayer' })} />
           )}
         </div>
       </div>
@@ -1364,6 +1395,13 @@ export default function App() {
           players={players}
           onClose={() => setModal(null)}
           onSubmit={(data) => { adminScheduleMatch(data); setModal(null); }}
+        />
+      )}
+
+      {modal?.kind === 'addPlayer' && (
+        <AddPlayerModal
+          onClose={() => setModal(null)}
+          onSubmit={(data) => { addPlayer(data); setModal(null); }}
         />
       )}
 
@@ -2425,7 +2463,7 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
 }
 
 
-function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut }) {
+function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut, onAddPlayer }) {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -2667,6 +2705,11 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
       {isAdmin && (
         <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
           <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-3" style={{ color: C.inkMute }}>Admin</div>
+          <button onClick={onAddPlayer}
+            className="w-full py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em] mb-2"
+            style={{ border: `1px solid ${C.forest}`, color: C.forest, background: 'transparent', cursor: 'pointer' }}>
+            Add Player
+          </button>
           <button onClick={() => { if (window.confirm && !window.confirm('Start a new season? This will archive all match history and reset everyone\'s stats to zero. Player accounts are kept. This cannot be undone.')) return; onReset(); }}
             className="w-full py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
             style={{ border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
@@ -2878,6 +2921,61 @@ function ActivityView({ matches, players, onViewProfile }) {
 /* ============================================================
    BOTTOM TABS
    ============================================================ */
+/* ============================================================
+   ADD PLAYER MODAL
+   ============================================================ */
+function AddPlayerModal({ onClose, onSubmit }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [ustaRating, setUstaRating] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim()) return;
+    onSubmit({ name: name.trim(), email: email.trim(), phone: phone.trim(), ustaRating: ustaRating.trim() });
+  };
+
+  const inputStyle = {
+    width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14,
+    border: `1px solid ${C.line}`, background: 'rgba(255,255,255,0.9)',
+    color: C.ink, outline: 'none', boxSizing: 'border-box',
+  };
+  const labelStyle = { fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: C.inkMute, display: 'block', marginBottom: 4 };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <div style={{ background: C.paper, borderRadius: '16px 16px 0 0', padding: '24px 20px 36px', width: '100%', maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'Fraunces, serif', color: C.ink }}>Add Player</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkMute, fontSize: 22 }}>×</button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={labelStyle}>Name *</label>
+            <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="Full name" required />
+          </div>
+          <div>
+            <label style={labelStyle}>Email *</label>
+            <input style={inputStyle} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" required />
+          </div>
+          <div>
+            <label style={labelStyle}>Phone</label>
+            <input style={inputStyle} type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Optional" />
+          </div>
+          <div>
+            <label style={labelStyle}>USTA Rating</label>
+            <input style={inputStyle} value={ustaRating} onChange={e => setUstaRating(e.target.value)} placeholder="e.g. 3.5" />
+          </div>
+          <button type="submit" style={{ marginTop: 4, padding: '12px', borderRadius: 8, background: C.forest, color: 'white', border: 'none', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer' }}>
+            Add to Ladder
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ============================================================
    ADMIN MATCH MODAL
    ============================================================ */
