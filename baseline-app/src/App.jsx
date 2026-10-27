@@ -1768,14 +1768,14 @@ function Avatar({ name, size = 32 }) {
       <circle cx="50" cy="50" r="50" fill={bg} />
       {/* Tennis ball seams — two horizontal arcs curving inward toward center, behind text */}
       <path
-        d="M 8 25 C 28 35, 72 35, 92 25"
+        d="M 8 15 C 28 25, 72 25, 92 15"
         fill="none"
         stroke="#F5EDD6"
         strokeWidth="6"
         strokeLinecap="round"
       />
       <path
-        d="M 8 75 C 28 65, 72 65, 92 75"
+        d="M 8 85 C 28 75, 72 75, 92 85"
         fill="none"
         stroke="#F5EDD6"
         strokeWidth="6"
