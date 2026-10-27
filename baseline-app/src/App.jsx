@@ -1249,7 +1249,7 @@ export default function App() {
 
         <div className="px-5">
           {tab === 'ladder' && (
-            <LadderView ranked={ranked} matches={matches} myId={currentUserId} isAdmin={isAdmin()} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })} players={players} />
+            <LadderView ranked={ranked} matches={matches} myId={currentUserId} isAdmin={isAdmin()} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })} onQuickReport={(opp) => { const tempMatch = { id: 'temp-' + Date.now(), a: currentUserId, b: opp.id, status: 'scheduled', matchType: 'ladder', createdAt: new Date().toISOString().slice(0, 10) }; setMatches(prev => [...prev, tempMatch]); setModal({ kind: 'report', payload: tempMatch }); }} players={players} />
           )}
           {tab === 'matches' && (
             <MatchesView
@@ -1477,7 +1477,7 @@ function StreakBadge({ streak }) {
 /* ============================================================
    LADDER VIEW
    ============================================================ */
-function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleActive, onChallenge, players }) {
+function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleActive, onChallenge, onQuickReport, players }) {
   const [showInactive, setShowInactive] = useState(false);
   const me = ranked.find(p => p.id === myId) || players?.find(p => p.id === myId);
   const isGuest = me?.role === 'guest';
@@ -1536,6 +1536,7 @@ function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleAct
               onViewProfile={() => onViewProfile(p)}
               onToggleActive={() => onToggleActive(p.id)}
               onChallenge={!isMe ? () => onChallenge(p) : null}
+              onQuickReport={!isMe ? () => onQuickReport(p) : null}
               hasOpen={!isMe && hasOpenWith(p.id)}
               isLast={idx === visiblePlayers.length - 1}
             />
@@ -1568,7 +1569,7 @@ function FilterChip({ active, onClick, children }) {
   );
 }
 
-function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onToggleActive, onChallenge, hasOpen, isLast }) {
+function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onToggleActive, onChallenge, onQuickReport, hasOpen, isLast }) {
   const isHidden = player.isActive === false;
   const podiumBg = rank === 1 ? 'rgba(232,201,58,0.12)' : rank === 2 ? 'rgba(180,180,190,0.12)' : rank === 3 ? 'rgba(180,120,60,0.10)' : null;
   const rankColor = rank === 1 ? C.opticDeep : rank === 2 ? '#7A8090' : rank === 3 ? '#8B6020' : C.inkMute;
@@ -1664,13 +1665,24 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
               Pending
             </span>
           ) : (
-            <button
-              onClick={onChallenge}
-              className="text-[9px] uppercase tracking-[0.1em] font-bold px-2 py-1 rounded flex-shrink-0"
-              style={{ background: C.clay, color: 'white', whiteSpace: 'nowrap' }}
-            >
-              Challenge
-            </button>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={onChallenge}
+                className="text-[9px] uppercase tracking-[0.1em] font-bold px-2 py-1 rounded flex-shrink-0"
+                style={{ background: C.clay, color: 'white', whiteSpace: 'nowrap' }}
+              >
+                Challenge
+              </button>
+              {onQuickReport && (
+                <button
+                  onClick={onQuickReport}
+                  className="text-[9px] uppercase tracking-[0.1em] font-bold px-2 py-1 rounded flex-shrink-0"
+                  style={{ background: 'white', color: C.clay, border: `1.5px solid ${C.clay}`, whiteSpace: 'nowrap' }}
+                >
+                  Report
+                </button>
+              )}
+            </div>
           )
         )}
       </div>
