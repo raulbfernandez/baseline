@@ -3613,7 +3613,7 @@ function CommunityView({ hitPosts, matches, players, myId, onPostHit, onClaimHit
 
 function BottomTabs({ tab, setTab, pendingCount }) {
   const PodiumIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
       {/* Cup body */}
       <path d="M5 2 H15 L13.5 11 Q13 14, 10 14 Q7 14, 6.5 11 Z" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.25" strokeLinejoin="round"/>
       {/* Handles */}
@@ -3628,7 +3628,7 @@ function BottomTabs({ tab, setTab, pendingCount }) {
 
   // Two rackets crossed in an X — clearer design
   const RacketsIcon = () => (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+    <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
       {/* Racket 1: tilted left (top-right to bottom-left) */}
       {/* Head */}
       <ellipse cx="15.5" cy="5.5" rx="4" ry="5" stroke="currentColor" strokeWidth="1.5" transform="rotate(35 15.5 5.5)"/>
@@ -3650,7 +3650,7 @@ function BottomTabs({ tab, setTab, pendingCount }) {
   );
 
   const TennisBallIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
       <circle cx="10" cy="10" r="9" fill="currentColor" opacity="0.35" stroke="currentColor" strokeWidth="1.8"/>
       <path d="M3.5 4.5 C6 7, 6 13, 3.5 15.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
       <path d="M16.5 4.5 C14 7, 14 13, 16.5 15.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
@@ -3673,7 +3673,7 @@ function BottomTabs({ tab, setTab, pendingCount }) {
   );
 
   const CommunityIcon = () => (
-    <svg width="24" height="20" viewBox="0 0 24 20" fill="none">
+    <svg width="30" height="26" viewBox="0 0 24 20" fill="none">
       {/* Left person head */}
       <circle cx="4.5" cy="3.5" r="2" fill="currentColor"/>
       {/* Left person body */}
@@ -3734,9 +3734,9 @@ function BottomTabs({ tab, setTab, pendingCount }) {
               style={{ color: active ? C.optic : 'rgba(255,255,255,0.4)', minWidth: 0 }}
             >
               {active && (
-                <div style={{ position: 'absolute', top: -2, left: '50%', transform: 'translateX(-50%)', width: 24, height: 3, background: C.optic, borderRadius: '0 0 3px 3px' }} />
+                <div style={{ position: 'absolute', top: -2, left: '50%', transform: 'translateX(-50%)', width: 32, height: 3, background: C.optic, borderRadius: '0 0 3px 3px' }} />
               )}
-              <div className="relative flex items-center justify-center" style={{ height: 24 }}>
+              <div className="relative flex items-center justify-center" style={{ height: 30 }}>
                 {t.icon}
                 {t.badge > 0 && (
                   <span
