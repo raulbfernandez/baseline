@@ -1219,13 +1219,17 @@ export default function App() {
         else { if (wins === 0) losses++; else break; }
       }
       const recentForm = myMatches.slice(0, 5).map(m => m.winnerId === p.id ? 'W' : 'L');
-      streakMap[p.id] = { wins, losses, recentForm };
+      const currentWins = myMatches.filter(m => m.winnerId === p.id).length;
+      const currentLosses = myMatches.filter(m => m.winnerId !== p.id).length;
+      streakMap[p.id] = { wins, losses, recentForm, currentWins, currentLosses };
     });
     return rank(players).map(p => ({
       ...p,
       liveStreak: streakMap[p.id]?.wins || 0,
       lossStreak: streakMap[p.id]?.losses || 0,
       recentForm: streakMap[p.id]?.recentForm || [],
+      currentWins: streakMap[p.id]?.currentWins ?? p.wins,
+      currentLosses: streakMap[p.id]?.currentLosses ?? p.losses,
     }));
   }, [players, matches]);
 
@@ -1632,7 +1636,7 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
           </div>
           <div>
             <div style={{ fontSize: 9, color: C.inkMute, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, lineHeight: 1 }}>W–L</div>
-            <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 13, color: C.ink, fontWeight: 700, lineHeight: 1.2 }}>{player.wins}–{player.losses}</div>
+            <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 13, color: C.ink, fontWeight: 700, lineHeight: 1.2 }}>{player.currentWins ?? player.wins}–{player.currentLosses ?? player.losses}</div>
           </div>
           {player.recentForm && player.recentForm.length > 0 && (
             <div>
