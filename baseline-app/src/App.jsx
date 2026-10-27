@@ -1249,7 +1249,7 @@ export default function App() {
 
         <div className="px-5">
           {tab === 'ladder' && (
-            <LadderView ranked={ranked} matches={matches} myId={currentUserId} isAdmin={isAdmin()} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })} onQuickReport={(opp) => { const tempMatch = { id: 'temp-' + Date.now(), a: currentUserId, b: opp.id, status: 'scheduled', matchType: 'ladder', createdAt: new Date().toISOString().slice(0, 10) }; setMatches(prev => [...prev, tempMatch]); setModal({ kind: 'report', payload: tempMatch }); }} players={players} />
+            <LadderView ranked={ranked} matches={matches} myId={currentUserId} isAdmin={isAdmin()} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })} players={players} />
           )}
           {tab === 'matches' && (
             <MatchesView
@@ -1261,18 +1261,6 @@ export default function App() {
               onCancel={cancelMatch}
               onReport={(m) => setModal({ kind: 'report', payload: m })}
               onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })}
-              onQuickReport={(opp) => {
-                // Create a temporary match record and add it to state immediately
-                // so reportScore() can find it when the user submits the form
-                const tempMatch = {
-                  id: 'temp-' + Date.now(),
-                  a: currentUserId, b: opp.id,
-                  status: 'scheduled', matchType: 'ladder',
-                  createdAt: new Date().toISOString().slice(0, 10),
-                };
-                setMatches(prev => [...prev, tempMatch]);
-                setModal({ kind: 'report', payload: tempMatch });
-              }}
               onDelete={deleteMatch}
               onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })}
               onReportFriendly={() => setModal({ kind: 'reportFriendly' })}
@@ -1307,7 +1295,18 @@ export default function App() {
           opponent={modal.payload}
           me={me}
           onClose={() => setModal(null)}
-          onSubmit={(data) => { proposeChallenge(data); setModal(null); }}
+          onSubmit={(data) => {
+            if (data.reportNow) {
+              // Create match as scheduled then immediately report the score
+              const matchId = 'm' + Date.now();
+              const newMatch = { id: matchId, a: currentUserId, b: data.opponentId, status: 'scheduled', matchType: data.matchType, proposedDate: data.date, location: data.location, createdAt: new Date().toISOString().slice(0, 10) };
+              setMatches(prev => [...prev, newMatch]);
+              syncMatch(newMatch).then(() => reportScore({ matchId, winnerId: data.winnerId, scoreStr: data.scoreStr, sets: data.sets }));
+            } else {
+              proposeChallenge(data);
+            }
+            setModal(null);
+          }}
         />
       )}
       {modal?.kind === 'report' && (
@@ -1477,7 +1476,7 @@ function StreakBadge({ streak }) {
 /* ============================================================
    LADDER VIEW
    ============================================================ */
-function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleActive, onChallenge, onQuickReport, players }) {
+function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleActive, onChallenge, players }) {
   const [showInactive, setShowInactive] = useState(false);
   const me = ranked.find(p => p.id === myId) || players?.find(p => p.id === myId);
   const isGuest = me?.role === 'guest';
@@ -1536,7 +1535,6 @@ function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleAct
               onViewProfile={() => onViewProfile(p)}
               onToggleActive={() => onToggleActive(p.id)}
               onChallenge={!isMe ? () => onChallenge(p) : null}
-              onQuickReport={!isMe ? () => onQuickReport(p) : null}
               hasOpen={!isMe && hasOpenWith(p.id)}
               isLast={idx === visiblePlayers.length - 1}
             />
@@ -1569,7 +1567,7 @@ function FilterChip({ active, onClick, children }) {
   );
 }
 
-function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onToggleActive, onChallenge, onQuickReport, hasOpen, isLast }) {
+function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onToggleActive, onChallenge, hasOpen, isLast }) {
   const isHidden = player.isActive === false;
   const podiumBg = rank === 1 ? 'rgba(232,201,58,0.12)' : rank === 2 ? 'rgba(180,180,190,0.12)' : rank === 3 ? 'rgba(180,120,60,0.10)' : null;
   const rankColor = rank === 1 ? C.opticDeep : rank === 2 ? '#7A8090' : rank === 3 ? '#8B6020' : C.inkMute;
@@ -1665,24 +1663,13 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
               Pending
             </span>
           ) : (
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={onChallenge}
-                className="text-[9px] uppercase tracking-[0.1em] font-bold px-2 py-1 rounded flex-shrink-0"
-                style={{ background: C.clay, color: 'white', whiteSpace: 'nowrap' }}
-              >
-                Challenge
-              </button>
-              {onQuickReport && (
-                <button
-                  onClick={onQuickReport}
-                  className="text-[9px] uppercase tracking-[0.1em] font-bold px-2 py-1 rounded flex-shrink-0"
-                  style={{ background: 'white', color: C.clay, border: `1.5px solid ${C.clay}`, whiteSpace: 'nowrap' }}
-                >
-                  Report
-                </button>
-              )}
-            </div>
+            <button
+              onClick={onChallenge}
+              className="text-[9px] uppercase tracking-[0.1em] font-bold px-2 py-1 rounded flex-shrink-0"
+              style={{ background: C.clay, color: 'white', whiteSpace: 'nowrap' }}
+            >
+              Challenge
+            </button>
           )
         )}
       </div>
@@ -1857,7 +1844,7 @@ function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
   );
 }
 
-function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onQuickReport, onDelete, onViewProfile, onReportFriendly, isAdmin, onAdminMatch }) {
+function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onDelete, onViewProfile, onReportFriendly, isAdmin, onAdminMatch }) {
   const [sub, setSub] = useState('open');
   const [historyFilter, setHistoryFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -1946,22 +1933,13 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
                 {alreadyChallenged ? (
                   <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: C.inkMute }}>Open match</span>
                 ) : (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { onQuickReport(p); setSearch(''); }}
-                      className="text-[10px] uppercase tracking-[0.12em] font-bold px-3 py-1.5 rounded"
-                      style={{ background: 'white', color: C.clay, border: `1.5px solid ${C.clay}` }}
-                    >
-                      Report
-                    </button>
-                    <button
-                      onClick={() => { onChallenge(p); setSearch(''); }}
-                      className="text-[10px] uppercase tracking-[0.12em] font-bold px-3 py-1.5 rounded"
-                      style={{ background: C.clay, color: 'white' }}
-                    >
-                      Challenge
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => { onChallenge(p); setSearch(''); }}
+                    className="text-[10px] uppercase tracking-[0.12em] font-bold px-3 py-1.5 rounded"
+                    style={{ background: C.clay, color: 'white' }}
+                  >
+                    Challenge
+                  </button>
                 )}
               </div>
             );
@@ -3794,13 +3772,22 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
   });
   const [location, setLocation] = useState(VENUES[0]);
   const [customLocation, setCustomLocation] = useState('');
+  const [reportNow, setReportNow] = useState(false);
+  const [winnerId, setWinnerId] = useState('');
+  const [sets, setSets] = useState([{ a: '', b: '' }, { a: '', b: '' }, { a: '', b: '' }]);
 
   const finalLocation = location === 'Other' ? customLocation : location;
 
+  const resolvedSets = sets.filter(s => s.a !== '' && s.b !== '');
+  const scoreStr = resolvedSets.map(s => `${s.a}-${s.b}`).join(', ');
+  const canSubmit = !reportNow || (winnerId && resolvedSets.length >= 2);
+
+  const accentColor = matchType === 'friendly' ? C.green : C.clay;
+
   return (
     <ModalShell onClose={onClose}>
-      <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-2" style={{ color: C.clay }}>
-        New Challenge
+      <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-2" style={{ color: accentColor }}>
+        {reportNow ? 'Report Match' : 'New Challenge'}
       </div>
       <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 600, fontSize: 24, lineHeight: 1.1, color: C.ink }} className="mb-4">
         vs {opponent.name}
@@ -3835,7 +3822,7 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
         </div>
       </div>
 
-      <div className="space-y-3 mb-5">
+      <div className="space-y-3 mb-4">
         <div>
           <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-1.5" style={{ color: C.inkMute }}>When</label>
           <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)}
@@ -3854,7 +3841,7 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
               className="w-full px-3 py-2.5 rounded text-sm mt-2"
               style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }} />
           )}
-          {VENUE_BOOKING[location] && (
+          {VENUE_BOOKING[location] && !reportNow && (
             <a href={VENUE_BOOKING[location]} target="_blank" rel="noopener noreferrer"
               className="block mt-2 text-center text-[11px] font-semibold uppercase tracking-[0.1em] py-1.5 rounded"
               style={{ color: C.clay, border: `1px solid ${C.clay}`, textDecoration: 'none' }}>
@@ -3864,15 +3851,58 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
         </div>
       </div>
 
+      {/* Report score now toggle */}
+      <button
+        onClick={() => setReportNow(r => !r)}
+        className="w-full flex items-center justify-between px-3 py-2.5 rounded mb-4 text-[11px] font-semibold"
+        style={{ background: reportNow ? `${accentColor}15` : C.parchmentWarm, border: `1.5px solid ${reportNow ? accentColor : C.line}`, color: reportNow ? accentColor : C.inkMute }}
+      >
+        <span>Already played? Report score now</span>
+        <span style={{ fontSize: 16 }}>{reportNow ? '✓' : '+'}</span>
+      </button>
+
+      {/* Score entry */}
+      {reportNow && (
+        <div className="mb-4 space-y-3">
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-2" style={{ color: C.inkMute }}>Winner</label>
+            <div className="flex gap-2">
+              {[{ id: me?.id, label: me?.name || 'You' }, { id: opponent.id, label: opponent.name }].map(p => (
+                <button key={p.id} onClick={() => setWinnerId(p.id)}
+                  className="flex-1 py-2 rounded text-[11px] font-semibold uppercase tracking-[0.1em]"
+                  style={{ background: winnerId === p.id ? accentColor : C.parchmentWarm, color: winnerId === p.id ? 'white' : C.ink, border: `1.5px solid ${winnerId === p.id ? accentColor : C.line}` }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-2" style={{ color: C.inkMute }}>Score (sets)</label>
+            {sets.map((s, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: C.inkMute, width: 32 }}>Set {i + 1}</span>
+                <ScoreDropdown value={s.a} onChange={v => setSets(prev => prev.map((x, j) => j === i ? { ...x, a: v } : x))} label={me?.name || 'You'} />
+                <span style={{ color: C.inkMute }}>–</span>
+                <ScoreDropdown value={s.b} onChange={v => setSets(prev => prev.map((x, j) => j === i ? { ...x, b: v } : x))} label={opponent.name} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button onClick={onClose} className="flex-1 py-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
           style={{ border: `1px solid ${C.line}`, color: C.inkMute }}>
           Cancel
         </button>
-        <button onClick={() => onSubmit({ opponentId: opponent.id, date, location: finalLocation, matchType })}
+        <button
+          onClick={() => {
+            if (!canSubmit) return;
+            onSubmit({ opponentId: opponent.id, date, location: finalLocation, matchType, reportNow, winnerId, scoreStr, sets: resolvedSets });
+          }}
           className="flex-1 py-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
-          style={{ background: matchType === 'friendly' ? C.green : C.clay, color: 'white' }}>
-          Send Challenge
+          style={{ background: canSubmit ? accentColor : C.line, color: 'white' }}>
+          {reportNow ? 'Save Result' : 'Send Challenge'}
         </button>
       </div>
     </ModalShell>
