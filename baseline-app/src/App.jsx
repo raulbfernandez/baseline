@@ -1261,6 +1261,18 @@ export default function App() {
               onCancel={cancelMatch}
               onReport={(m) => setModal({ kind: 'report', payload: m })}
               onChallenge={(opp) => setModal({ kind: 'challenge', payload: opp })}
+              onQuickReport={(opp) => {
+                // Create a temporary match record and add it to state immediately
+                // so reportScore() can find it when the user submits the form
+                const tempMatch = {
+                  id: 'temp-' + Date.now(),
+                  a: currentUserId, b: opp.id,
+                  status: 'scheduled', matchType: 'ladder',
+                  createdAt: new Date().toISOString().slice(0, 10),
+                };
+                setMatches(prev => [...prev, tempMatch]);
+                setModal({ kind: 'report', payload: tempMatch });
+              }}
               onDelete={deleteMatch}
               onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })}
               onReportFriendly={() => setModal({ kind: 'reportFriendly' })}
@@ -1833,7 +1845,7 @@ function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
   );
 }
 
-function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onDelete, onViewProfile, onReportFriendly, isAdmin, onAdminMatch }) {
+function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onQuickReport, onDelete, onViewProfile, onReportFriendly, isAdmin, onAdminMatch }) {
   const [sub, setSub] = useState('open');
   const [historyFilter, setHistoryFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -1922,13 +1934,22 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
                 {alreadyChallenged ? (
                   <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: C.inkMute }}>Open match</span>
                 ) : (
-                  <button
-                    onClick={() => { onChallenge(p); setSearch(''); }}
-                    className="text-[10px] uppercase tracking-[0.12em] font-bold px-3 py-1.5 rounded"
-                    style={{ background: C.clay, color: 'white' }}
-                  >
-                    Challenge
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { onQuickReport(p); setSearch(''); }}
+                      className="text-[10px] uppercase tracking-[0.12em] font-bold px-3 py-1.5 rounded"
+                      style={{ background: 'white', color: C.clay, border: `1.5px solid ${C.clay}` }}
+                    >
+                      Report
+                    </button>
+                    <button
+                      onClick={() => { onChallenge(p); setSearch(''); }}
+                      className="text-[10px] uppercase tracking-[0.12em] font-bold px-3 py-1.5 rounded"
+                      style={{ background: C.clay, color: 'white' }}
+                    >
+                      Challenge
+                    </button>
+                  </div>
                 )}
               </div>
             );
