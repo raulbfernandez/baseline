@@ -1348,7 +1348,7 @@ export default function App() {
             <ContactsView players={players} myId={currentUserId} isAdmin={isAdmin()} canManagePasswords={canManagePasswords()} onResetPassword={resetUserPassword} onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })} onToggleActive={togglePlayerActive} onToggleRole={toggleRole} />
           )}
           {tab === 'profile' && (
-            <ProfileView me={me} myRank={myRank} matches={matches} players={players} onChangePassword={changePassword} onUpdateProfile={updateProfile} onDeleteMatch={deleteMatch} isAdmin={isAdmin()} onReset={reset} onSignOut={handleSignOut} onAddPlayer={() => setModal({ kind: 'addPlayer' })} onApprove={approvePlayer} />
+            <ProfileView me={me} myRank={myRank} matches={matches} players={players} onChangePassword={changePassword} onUpdateProfile={updateProfile} onDeleteMatch={deleteMatch} isAdmin={isAdmin()} onReset={reset} onSignOut={handleSignOut} onAddPlayer={() => setModal({ kind: 'addPlayer' })} onApprove={approvePlayer} onAdminMatch={() => setModal({ kind: 'adminMatch' })} />
           )}
         </div>
       </div>
@@ -1947,14 +1947,6 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
     <div>
       <div className="flex items-end justify-between mb-1">
         <SectionHeading kicker="Your fixtures" title="My Matches" noMargin />
-        {isAdmin && (
-          <button
-            onClick={onAdminMatch}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-[0.1em]"
-            style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer', marginBottom: 20 }}>
-            + Add Match
-          </button>
-        )}
       </div>
 
       {/* Player search to challenge */}
@@ -2488,7 +2480,7 @@ function ImageCropModal({ imageSrc, onConfirm, onCancel }) {
 }
 
 
-function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut, onAddPlayer, onApprove }) {
+function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateProfile, onDeleteMatch, isAdmin, onReset, onSignOut, onAddPlayer, onApprove, onAdminMatch }) {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -2758,14 +2750,16 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
             </div>
           )}
 
-          <button onClick={onAddPlayer}
-            className="w-full py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em] mb-2"
-            style={{ border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
+          <button onClick={onAddPlayer} type="button"
+            style={{ display: 'block', width: '100%', padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
             Add Player
           </button>
-          <button onClick={() => { if (window.confirm && !window.confirm('Start a new season? This will archive all match history and reset everyone\'s stats to zero. Player accounts are kept. This cannot be undone.')) return; onReset(); }}
-            className="w-full py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
-            style={{ border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
+          <button onClick={onAdminMatch} type="button"
+            style={{ display: 'block', width: '100%', padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
+            Add Match
+          </button>
+          <button onClick={() => { if (window.confirm && !window.confirm('Start a new season? This will archive all match history and reset everyone\'s stats to zero. Player accounts are kept. This cannot be undone.')) return; onReset(); }} type="button"
+            style={{ display: 'block', width: '100%', padding: '10px 0', fontSize: 12, fontWeight: 600, borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.1em', border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
             Start New Season
           </button>
         </div>
