@@ -602,7 +602,7 @@ function LoginScreen({ players, passwords, onLogin }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ fontFamily: '"DM Sans", sans-serif', background: '#E8DCC8' }}>
+    <div className="min-h-screen flex flex-col items-center justify-start px-6 pt-10" style={{ fontFamily: '"DM Sans", sans-serif', background: '#E8DCC8' }}>
       <InstallBanner />
       <PaperTexture />
       {/* Tennis court — horizontal net, singles */}
