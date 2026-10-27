@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lftc-v1';
+const CACHE_NAME = 'lftc-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
