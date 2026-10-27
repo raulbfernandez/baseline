@@ -1679,7 +1679,8 @@ function LadderView({ ranked, matches, myId, isAdmin, onViewProfile, onToggleAct
         style={{ background: 'rgba(255,255,255,0.88)', border: `1.5px solid ${C.parchmentDeep}` }}
       >
         {visiblePlayers.map((p, idx) => {
-          const realRank = ranked.findIndex(r => r.id === p.id) + 1;
+          // Tied rank: count how many players above this one have strictly more points
+          const realRank = ranked.filter(r => (r.points || 0) > (p.points || 0)).length + 1;
           const isMe = p.id === myId;
           return (
             <PlayerRow
