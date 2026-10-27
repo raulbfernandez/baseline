@@ -670,14 +670,17 @@ export default function App() {
         const mdb = await sb.from('matches');
         const dbMatches = await mdb.select();
         if (Array.isArray(dbMatches) && dbMatches.length > 0) {
-          setMatches(dbMatches.map(m => ({
-            id: m.id, a: m.player_a, b: m.player_b, status: m.status,
-            winnerId: m.winner_id, score: m.score, sets: m.sets,
-            proposedDate: m.proposed_date, location: m.location,
-            winnerChange: m.winner_change, loserChange: m.loser_change,
-            change: m.change_pts, date: m.match_date,
-            matchType: m.match_type || 'ladder',
-          })));
+          setMatches(dbMatches
+            .filter(m => !m.season)  // exclude archived (previous season) matches
+            .map(m => ({
+              id: m.id, a: m.player_a, b: m.player_b, status: m.status,
+              winnerId: m.winner_id, score: m.score, sets: m.sets,
+              proposedDate: m.proposed_date, location: m.location,
+              winnerChange: m.winner_change, loserChange: m.loser_change,
+              change: m.change_pts, date: m.match_date,
+              matchType: m.match_type || 'ladder',
+              season: m.season,
+            })));
         } else {
           // Seed matches
           const seeds = seedMatches();
@@ -1102,6 +1105,106 @@ export default function App() {
     showToast(winnerId === currentUserId ? `Won! +${winnerPoints} pts` : loserId === currentUserId ? `+${loserPoints} pts earned` : 'Score saved');
   };
 
+  // Admin: schedule a match between any two players (neither needs to be the admin)
+  const adminScheduleMatch = async ({ playerAId, playerBId, date, location, matchType, reportNow, winnerId, scoreStr, sets }) => {
+    const newMatch = {
+      id: 'm' + Date.now(),
+      a: playerAId, b: playerBId,
+      status: reportNow ? 'completed' : 'scheduled',
+      matchType: matchType || 'ladder',
+      proposedDate: date,
+      location,
+      createdAt: new Date().toISOString().slice(0, 10),
+    };
+
+    if (reportNow && winnerId && scoreStr) {
+      const loserId = winnerId === playerAId ? playerBId : playerAId;
+      const winnerSide = winnerId === playerAId ? 'a' : 'b';
+      const isFriendly = matchType === 'friendly';
+      const earned = isFriendly ? { a: 0, b: 0 } : calcPoints(sets || [], winnerSide);
+      const winnerPoints = winnerSide === 'a' ? earned.a : earned.b;
+      const loserPoints  = winnerSide === 'a' ? earned.b : earned.a;
+
+      newMatch.winnerId = winnerId;
+      newMatch.score = scoreStr;
+      newMatch.sets = sets;
+      newMatch.date = new Date().toISOString().slice(0, 10);
+      newMatch.winnerChange = winnerPoints;
+      newMatch.loserChange = loserPoints;
+      newMatch.change = 0;
+
+      const newPlayers = players.map(p => {
+        if (isFriendly) return p;
+        if (p.id === winnerId) return { ...p, points: p.points + winnerPoints, wins: p.wins + 1, streak: p.streak >= 0 ? p.streak + 1 : 1 };
+        if (p.id === loserId) return { ...p, points: Math.max(0, p.points + loserPoints), losses: p.losses + 1, streak: p.streak <= 0 ? p.streak - 1 : -1 };
+        return p;
+      });
+      setPlayers(newPlayers);
+      setMatches(prev => [newMatch, ...prev]);
+      await syncMatch(newMatch);
+      const updatedWinner = newPlayers.find(p => p.id === winnerId);
+      const updatedLoser = newPlayers.find(p => p.id === loserId);
+      if (updatedWinner) await syncPlayer(updatedWinner);
+      if (updatedLoser) await syncPlayer(updatedLoser);
+
+      // Email both players
+      const winnerPlayer = find(players, winnerId);
+      const loserPlayer = find(players, loserId);
+      const emailBoth = async (recipient, isWinner) => {
+        if (!recipient?.email) return;
+        await sendEmail({
+          to: recipient.email,
+          subject: isWinner ? `🎾 Match result: You won!` : `🎾 Match result recorded`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+              <h2 style="color: #CD5D35;">${isWinner ? '🏆 You won!' : 'Match result recorded'}</h2>
+              <p>A match result has been submitted on <strong>Los Feliz Tennis Club</strong>.</p>
+              <table style="margin: 16px 0; border-collapse: collapse;">
+                <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">🏆 Winner</td><td><strong>${winnerPlayer?.name}</strong></td></tr>
+                <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📊 Score</td><td><strong>${scoreStr}</strong></td></tr>
+                <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">✨ Points</td><td><strong>${isWinner ? `+${winnerPoints}` : `+${loserPoints}`} pts</strong></td></tr>
+              </table>
+              <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #CD5D35;">Baseline</a> to view the updated ladder.</p>
+              <p style="color: #7A6548; font-size: 13px;">— The Los Feliz Tennis Club Team</p>
+            </div>
+          `,
+        });
+      };
+      await emailBoth(winnerPlayer, true);
+      await emailBoth(loserPlayer, false);
+
+      showToast(`Match recorded: ${winnerPlayer?.name} won`);
+    } else {
+      setMatches(prev => [newMatch, ...prev]);
+      await syncMatch(newMatch);
+      // Notify both players
+      const pA = find(players, playerAId);
+      const pB = find(players, playerBId);
+      for (const recipient of [pA, pB]) {
+        if (!recipient?.email) continue;
+        await sendEmail({
+          to: recipient.email,
+          subject: `🎾 Match scheduled: ${pA?.name} vs ${pB?.name}`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+              <h2 style="color: #CD5D35;">Match Scheduled</h2>
+              <p>A match has been scheduled for you on <strong>Los Feliz Tennis Club</strong>.</p>
+              <table style="margin: 16px 0; border-collapse: collapse;">
+                <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">🎾 Players</td><td><strong>${pA?.name} vs ${pB?.name}</strong></td></tr>
+                <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📅 Date</td><td><strong>${date || 'TBD'}</strong></td></tr>
+                <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">📍 Location</td><td><strong>${location || 'TBD'}</strong></td></tr>
+                <tr><td style="color: #7A6548; padding: 4px 12px 4px 0;">🏷️ Type</td><td><strong>${matchType === 'friendly' ? 'Friendly (no ranking effect)' : 'Ladder match'}</strong></td></tr>
+              </table>
+              <p>Log in to <a href="https://baseline-alpha.vercel.app" style="color: #CD5D35;">Baseline</a> to view your matches.</p>
+              <p style="color: #7A6548; font-size: 13px;">— The Los Feliz Tennis Club Team</p>
+            </div>
+          `,
+        });
+      }
+      showToast(`Match scheduled: ${pA?.name} vs ${pB?.name}`);
+    }
+  };
+
   const me = find(players, currentUserId);
   const myRank = rankOf(players, currentUserId);
   const ranked = useMemo(() => {
@@ -1161,6 +1264,8 @@ export default function App() {
               onDelete={deleteMatch}
               onViewProfile={(player) => setModal({ kind: 'playerDetail', payload: player })}
               onReportFriendly={() => setModal({ kind: 'reportFriendly' })}
+              isAdmin={isAdmin()}
+              onAdminMatch={() => setModal({ kind: 'adminMatch' })}
             />
           )}
           {tab === 'community' && (
@@ -1231,6 +1336,14 @@ export default function App() {
             setModal(null);
             showToast('Friendly match logged!');
           }}
+        />
+      )}
+
+      {modal?.kind === 'adminMatch' && (
+        <AdminMatchModal
+          players={players}
+          onClose={() => setModal(null)}
+          onSubmit={(data) => { adminScheduleMatch(data); setModal(null); }}
         />
       )}
 
@@ -1720,7 +1833,7 @@ function HitBoard({ hitPosts, myId, players, onPostHit, onClaimHit }) {
   );
 }
 
-function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onDelete, onViewProfile, onReportFriendly }) {
+function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, onReport, onChallenge, onDelete, onViewProfile, onReportFriendly, isAdmin, onAdminMatch }) {
   const [sub, setSub] = useState('open');
   const [historyFilter, setHistoryFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -1749,7 +1862,17 @@ function MatchesView({ matches, players, myId, onAccept, onDecline, onCancel, on
 
   return (
     <div>
-      <SectionHeading kicker="Your fixtures" title="My Matches" />
+      <div className="flex items-end justify-between mb-1">
+        <SectionHeading kicker="Your fixtures" title="My Matches" noMargin />
+        {isAdmin && (
+          <button
+            onClick={onAdminMatch}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-[0.1em]"
+            style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer', marginBottom: 20 }}>
+            + Add Match
+          </button>
+        )}
+      </div>
 
       {/* Player search to challenge */}
       {sub !== 'friendlies' && (<div>
@@ -2289,7 +2412,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
   const [cropSrc, setCropSrc] = useState(null);
   const [historyFilter, setHistoryFilter] = useState('all');
 
-  const myCompleted = matches.filter(m => (m.a === me.id || m.b === me.id) && m.status === 'completed');
+  const myCompleted = matches.filter(m => (m.a === me.id || m.b === me.id) && m.status === 'completed' && !m.season);
   const ladderCompleted = myCompleted.filter(m => m.matchType !== 'friendly');
   const friendlyCompleted = myCompleted.filter(m => m.matchType === 'friendly');
   const lW = ladderCompleted.filter(m => m.winnerId === me.id).length;
@@ -2588,9 +2711,9 @@ function DetailStat({ icon, label, value, sublabel, mono, accent }) {
 /* ============================================================
    COMMON UI
    ============================================================ */
-function SectionHeading({ kicker, title }) {
+function SectionHeading({ kicker, title, noMargin }) {
   return (
-    <div className="mb-4 mt-3">
+    <div className={noMargin ? 'mt-3' : 'mb-4 mt-3'}>
       <div className="text-[9px] uppercase tracking-[0.35em] mb-1.5" style={{ color: C.clay, fontWeight: 700 }}>
         {kicker}
       </div>
@@ -2733,6 +2856,327 @@ function ActivityView({ matches, players, onViewProfile }) {
 /* ============================================================
    BOTTOM TABS
    ============================================================ */
+/* ============================================================
+   ADMIN MATCH MODAL
+   ============================================================ */
+function AdminMatchModal({ players, onClose, onSubmit }) {
+  const activePlayers = players.filter(p => p.isActive !== false);
+  const [step, setStep] = useState('pick'); // 'pick' | 'details' | 'score'
+  const [playerAId, setPlayerAId] = useState('');
+  const [playerBId, setPlayerBId] = useState('');
+  const [searchA, setSearchA] = useState('');
+  const [searchB, setSearchB] = useState('');
+  const [matchType, setMatchType] = useState('ladder');
+  const [date, setDate] = useState(() => {
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    d.setMinutes(Math.round(d.getMinutes() / 15) * 15, 0, 0);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+  const [location, setLocation] = useState(VENUES[0]);
+  const [customLocation, setCustomLocation] = useState('');
+  const [reportNow, setReportNow] = useState(false);
+
+  // Score state
+  const [sets, setSets] = useState([{ a: 0, b: 0 }, { a: 0, b: 0 }, null]);
+  const [thirdSetType, setThirdSetType] = useState('full');
+  const [tiebreaks, setTiebreaks] = useState({ 0: null, 1: null });
+
+  const playerA = find(players, playerAId);
+  const playerB = find(players, playerBId);
+  const finalLocation = location === 'Other' ? customLocation : location;
+
+  const filteredA = (searchA ? activePlayers.filter(p => p.name.toLowerCase().includes(searchA.toLowerCase())) : activePlayers)
+    .filter(p => p.id !== playerBId);
+  const filteredB = (searchB ? activePlayers.filter(p => p.name.toLowerCase().includes(searchB.toLowerCase())) : activePlayers)
+    .filter(p => p.id !== playerAId);
+
+  const updateSet = (idx, who, val) => {
+    const is3rdTiebreak = idx === 2 && thirdSetType === 'tiebreak';
+    const maxVal = is3rdTiebreak ? 10 : 7;
+    const v = Math.max(0, Math.min(maxVal, Number(val)));
+    const newSets = [...sets];
+    if (!newSets[idx]) newSets[idx] = { a: 0, b: 0 };
+    const updated = { ...newSets[idx], [who]: v };
+    newSets[idx] = updated;
+    setSets(newSets);
+    if (!is3rdTiebreak && !(updated.a === 6 && updated.b === 6)) {
+      setTiebreaks(prev => ({ ...prev, [idx]: null }));
+    }
+  };
+
+  const updateTiebreak = (idx, who, val) => {
+    setTiebreaks(prev => ({
+      ...prev,
+      [idx]: { ...(prev[idx] || { a: 0, b: 0 }), [who]: Math.max(0, Number(val)) },
+    }));
+  };
+
+  const validSets = sets.filter(s => s !== null);
+
+  const setWinner = (s, idx) => {
+    if (!s) return null;
+    if (s.a === 6 && s.b === 6) {
+      const tb = tiebreaks[idx];
+      if (!tb) return null;
+      if (tb.a >= 7 && tb.a - tb.b >= 2) return 'a';
+      if (tb.b >= 7 && tb.b - tb.a >= 2) return 'b';
+      return null;
+    }
+    if (s.a > s.b) return 'a';
+    if (s.b > s.a) return 'b';
+    return null;
+  };
+
+  const setsWonA = validSets.filter((s, i) => setWinner(s, i) === 'a').length;
+  const setsWonB = validSets.filter((s, i) => setWinner(s, i) === 'b').length;
+  const winnerSide = setsWonA > setsWonB ? 'a' : setsWonB > setsWonA ? 'b' : null;
+  const winnerId = winnerSide === 'a' ? playerAId : winnerSide === 'b' ? playerBId : null;
+
+  const w1 = setWinner(sets[0], 0);
+  const w2 = setWinner(sets[1], 1);
+  const firstTwoSplit = w1 && w2 && w1 !== w2;
+
+  useEffect(() => {
+    if (!firstTwoSplit && sets[2] !== null) {
+      setSets(prev => { const n = [...prev]; n[2] = null; return n; });
+    }
+  }, [firstTwoSplit]);
+
+  const resolvedSets = validSets.map((s, i) => {
+    if (s.a === 6 && s.b === 6) {
+      const w = setWinner(s, i);
+      if (w === 'a') return { a: 7, b: 6 };
+      if (w === 'b') return { a: 6, b: 7 };
+    }
+    return s;
+  });
+
+  const scoreStr = validSets.map((s, idx) => {
+    if (idx === 2 && thirdSetType === 'tiebreak') return `[${s.a}-${s.b}]`;
+    if (s.a === 6 && s.b === 6) {
+      const tb = tiebreaks[idx];
+      return tb ? `7-6 (${Math.max(tb.a, tb.b)})` : '7-6';
+    }
+    return `${s.a}-${s.b}`;
+  }).join(', ');
+
+  const regularOpts = [0,1,2,3,4,5,6,7];
+  const tbOpts = [0,1,2,3,4,5,6,7,8,9,10,11,12];
+  const longTbOpts = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+  const nameA = playerA?.name?.split(' ')[0] || 'Player A';
+  const nameB = playerB?.name?.split(' ')[0] || 'Player B';
+
+  const PlayerPicker = ({ label, selected, onSelect, filtered, search, onSearch, excludeId }) => (
+    <div className="mb-4">
+      <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-2" style={{ color: C.inkMute }}>{label}</div>
+      {selected ? (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: C.parchmentWarm, border: `1.5px solid ${C.clay}` }}>
+          <Avatar name={selected.name} size={28} />
+          <span style={{ fontFamily: '"Fraunces", serif', fontWeight: 600, fontSize: 14, color: C.ink, flex: 1 }}>{selected.name}</span>
+          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12, color: C.inkMute }}>{selected.points} pts</span>
+          <button onClick={() => onSelect('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkMute, padding: 0, marginLeft: 4 }}>
+            <X size={14} />
+          </button>
+        </div>
+      ) : (
+        <div>
+          <input type="text" value={search} onChange={e => onSearch(e.target.value)} placeholder="Search players..."
+            style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.line}`, borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: 'white', color: C.ink, boxSizing: 'border-box', marginBottom: 6 }} />
+          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}`, maxHeight: 180, overflowY: 'auto' }}>
+            {filtered.slice(0, 12).map(p => (
+              <button key={p.id} onClick={() => { onSelect(p.id); onSearch(''); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left"
+                style={{ background: 'white', border: 'none', cursor: 'pointer', borderBottom: `1px solid ${C.line}` }}>
+                <Avatar name={p.name} size={24} />
+                <span style={{ fontSize: 13, color: C.ink, fontFamily: '"Fraunces", serif', flex: 1 }}>{p.name}</span>
+                <span style={{ fontSize: 11, color: C.inkMute, fontFamily: '"JetBrains Mono", monospace' }}>{p.points} pts</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-1" style={{ color: C.clay }}>
+        Admin · Add Match
+      </div>
+      <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, lineHeight: 1.1, color: C.ink }} className="mb-4">
+        {playerA && playerB ? `${nameA} vs ${nameB}` : 'Schedule a Match'}
+      </div>
+
+      {/* Step 1: Pick players */}
+      <PlayerPicker
+        label="Player A"
+        selected={playerA}
+        onSelect={setPlayerAId}
+        filtered={filteredA}
+        search={searchA}
+        onSearch={setSearchA}
+      />
+      <PlayerPicker
+        label="Player B"
+        selected={playerB}
+        onSelect={setPlayerBId}
+        filtered={filteredB}
+        search={searchB}
+        onSearch={setSearchB}
+      />
+
+      {playerA && playerB && (
+        <>
+          {/* Match type */}
+          <div className="flex gap-1 mb-4 p-1 rounded-lg" style={{ background: C.parchmentWarm }}>
+            {[{ id: 'ladder', label: '🏆 Ladder' }, { id: 'friendly', label: '🎾 Friendly' }].map(t => (
+              <button key={t.id} onClick={() => setMatchType(t.id)}
+                className="flex-1 text-[11px] uppercase tracking-[0.12em] font-semibold py-2 rounded transition-all"
+                style={{ background: matchType === t.id ? C.ink : 'transparent', color: matchType === t.id ? C.parchment : C.inkMute, border: 'none', cursor: 'pointer' }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Date & Location */}
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-1.5" style={{ color: C.inkMute }}>When</label>
+              <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)}
+                className="w-full px-3 py-2.5 rounded text-sm"
+                style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }} />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Where</label>
+              <select value={location} onChange={e => setLocation(e.target.value)}
+                className="w-full px-3 py-2.5 rounded text-sm"
+                style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }}>
+                {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+              {location === 'Other' && (
+                <input type="text" placeholder="Enter location..." value={customLocation} onChange={e => setCustomLocation(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded text-sm mt-2"
+                  style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }} />
+              )}
+            </div>
+          </div>
+
+          {/* Report score now toggle */}
+          <button
+            onClick={() => setReportNow(v => !v)}
+            className="w-full py-2.5 mb-4 text-[12px] font-semibold rounded uppercase tracking-[0.1em] text-left flex items-center gap-2"
+            style={{ background: reportNow ? `${C.clay}15` : C.parchmentWarm, border: `1.5px solid ${reportNow ? C.clay : C.line}`, color: reportNow ? C.clay : C.inkMute, paddingLeft: 12 }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>{reportNow ? '☑' : '☐'}</span>
+            Report score now
+          </button>
+
+          {/* Inline score entry */}
+          {reportNow && (
+            <div className="mb-4 p-3 rounded-lg" style={{ background: C.parchmentWarm, border: `1px solid ${C.line}` }}>
+              {/* Player name headers */}
+              <div className="grid mb-1" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px' }}>
+                <div />
+                <div className="text-center text-[11px] uppercase tracking-[0.12em] font-bold truncate" style={{ color: C.inkMute }}>{nameA}</div>
+                <div />
+                <div className="text-center text-[11px] uppercase tracking-[0.12em] font-bold truncate" style={{ color: C.inkMute }}>{nameB}</div>
+                <div />
+              </div>
+
+              <div className="space-y-2 mb-3">
+                {sets.map((set, idx) => set === null ? null : (
+                  <div key={idx}>
+                    <div className="grid items-center gap-1" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px' }}>
+                      <div className="text-[10px] uppercase tracking-[0.1em] font-bold" style={{ color: C.inkMute }}>
+                        {idx === 2 && thirdSetType === 'tiebreak' ? 'TB' : `Set ${idx + 1}`}
+                      </div>
+                      <ScoreDropdown value={set.a} onChange={v => updateSet(idx, 'a', v)} highlight={setWinner(set, idx) === 'a'} options={idx === 2 && thirdSetType === 'tiebreak' ? tbOpts : regularOpts} />
+                      <div className="text-center font-bold" style={{ color: C.inkMute, fontFamily: '"JetBrains Mono", monospace', fontSize: 16 }}>–</div>
+                      <ScoreDropdown value={set.b} onChange={v => updateSet(idx, 'b', v)} highlight={setWinner(set, idx) === 'b'} options={idx === 2 && thirdSetType === 'tiebreak' ? tbOpts : regularOpts} />
+                      {idx === 2
+                        ? <button onClick={() => setSets(prev => { const n = [...prev]; n[2] = null; return n; })} style={{ color: C.inkMute, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}><X size={14} /></button>
+                        : <div />
+                      }
+                    </div>
+
+                    {set.a === 6 && set.b === 6 && !(idx === 2 && thirdSetType === 'tiebreak') && (
+                      <div className="grid items-center gap-1 mt-1 px-1 py-2 rounded" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px', background: `${C.clay}12`, border: `1px solid ${C.clay}30` }}>
+                        <div className="text-[10px] uppercase tracking-[0.1em] font-bold" style={{ color: C.clay }}>TB</div>
+                        <ScoreDropdown value={tiebreaks[idx]?.a ?? 0} onChange={v => updateTiebreak(idx, 'a', v)} highlight={(() => { const tb = tiebreaks[idx]; return !!(tb && tb.a >= 7 && tb.a - tb.b >= 2); })()} options={longTbOpts} />
+                        <div className="text-center font-bold" style={{ color: C.inkMute, fontFamily: '"JetBrains Mono", monospace', fontSize: 16 }}>–</div>
+                        <ScoreDropdown value={tiebreaks[idx]?.b ?? 0} onChange={v => updateTiebreak(idx, 'b', v)} highlight={(() => { const tb = tiebreaks[idx]; return !!(tb && tb.b >= 7 && tb.b - tb.a >= 2); })()} options={longTbOpts} />
+                        <div />
+                      </div>
+                    )}
+
+                    {idx === 2 && (
+                      <div className="flex gap-1 mt-2">
+                        {[{ id: 'full', label: 'Full set' }, { id: 'tiebreak', label: '10-pt TB' }].map(opt => (
+                          <button key={opt.id} onClick={() => setThirdSetType(opt.id)}
+                            className="flex-1 py-1.5 text-[10px] uppercase tracking-[0.1em] font-semibold rounded"
+                            style={{ background: thirdSetType === opt.id ? C.clay : 'transparent', color: thirdSetType === opt.id ? 'white' : C.inkMute, border: `1px solid ${thirdSetType === opt.id ? C.clay : C.line}` }}>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {sets[2] === null && firstTwoSplit && (
+                <button onClick={() => setSets(prev => { const n = [...prev]; n[2] = { a: 0, b: 0 }; return n; })}
+                  className="w-full py-2.5 mb-3 text-[11px] uppercase tracking-[0.15em] font-semibold rounded"
+                  style={{ border: `1px dashed ${C.clay}`, color: C.clay }}>
+                  + Add 3rd set
+                </button>
+              )}
+
+              {winnerSide && (
+                <div className="rounded-lg p-3 text-center" style={{ background: 'white', border: `1px solid ${C.line}` }}>
+                  <div className="text-[9px] uppercase tracking-[0.2em] font-bold mb-1" style={{ color: C.inkMute }}>Winner</div>
+                  <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 18, color: C.green }}>
+                    {winnerSide === 'a' ? nameA : nameB} 🎾
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button onClick={onClose} className="flex-1 py-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
+              style={{ border: `1px solid ${C.line}`, color: C.inkMute }}>
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (reportNow && !winnerId) return;
+                onSubmit({
+                  playerAId, playerBId, date, location: finalLocation, matchType,
+                  reportNow,
+                  winnerId: reportNow ? winnerId : undefined,
+                  scoreStr: reportNow ? scoreStr : undefined,
+                  sets: reportNow ? resolvedSets : undefined,
+                });
+              }}
+              className="flex-1 py-3 text-[12px] font-bold rounded uppercase tracking-[0.1em]"
+              style={{ background: (reportNow && !winnerId) ? C.line : C.clay, color: 'white', cursor: (reportNow && !winnerId) ? 'not-allowed' : 'pointer' }}>
+              {reportNow ? 'Save Result' : 'Schedule Match'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {!playerA || !playerB ? (
+        <button onClick={onClose} className="w-full py-2.5 mt-2 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
+          style={{ border: `1px solid ${C.line}`, color: C.inkMute }}>
+          Cancel
+        </button>
+      ) : null}
+    </ModalShell>
+  );
+}
+
 function FriendlyMatchModal({ players, myId, onClose, onSubmit }) {
   const [opponentId, setOpponentId] = useState('');
   const [search, setSearch] = useState('');
