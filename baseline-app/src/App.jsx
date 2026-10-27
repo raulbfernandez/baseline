@@ -2243,16 +2243,24 @@ function MatchCard({ match, players, myId, onAccept, onDecline, onCancel, onRepo
 function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassword, onViewProfile, onToggleActive, onToggleRole, onChallenge }) {
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
-  
-  // Filter players based on search and active status
+  const [sortBy, setSortBy] = useState('name'); // 'name' | 'points'
+  const [roleFilter, setRoleFilter] = useState('all'); // 'all' | 'member' | 'guest'
+
+  // Filter players based on search, active status, and role
   const filtered = players
     .filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.email && p.email.toLowerCase().includes(search.toLowerCase()));
       const matchesActive = (isAdmin && showInactive) || p.isActive !== false;
-      return matchesSearch && matchesActive;
+      const matchesRole = roleFilter === 'all' || p.role === roleFilter;
+      return matchesSearch && matchesActive && matchesRole;
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      if (sortBy === 'points') return (b.points || 0) - (a.points || 0);
+      // sort by last name
+      const lastName = n => n.trim().split(/\s+/).slice(-1)[0].toLowerCase();
+      return lastName(a.name).localeCompare(lastName(b.name));
+    });
 
   const inactiveCount = players.filter(p => p.isActive === false).length;
 
@@ -2275,6 +2283,23 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
             {showInactive ? `Hide ${inactiveCount}` : `Show ${inactiveCount} hidden`}
           </button>
         )}
+      </div>
+
+      {/* Sort + role filter chips */}
+      <div className="flex gap-2 mb-3 flex-wrap">
+        {[{ id: 'name', label: 'Last Name' }, { id: 'points', label: 'Points' }].map(s => (
+          <button key={s.id} onClick={() => setSortBy(s.id)} type="button"
+            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 10px', borderRadius: 20, border: `1px solid ${sortBy === s.id ? C.ink : C.line}`, background: sortBy === s.id ? C.ink : 'transparent', color: sortBy === s.id ? C.parchment : C.inkMute, cursor: 'pointer' }}>
+            {s.label}
+          </button>
+        ))}
+        <div style={{ width: 1, background: C.line, margin: '2px 0' }} />
+        {[{ id: 'all', label: 'All' }, { id: 'member', label: 'Members' }, { id: 'guest', label: 'Guests' }].map(r => (
+          <button key={r.id} onClick={() => setRoleFilter(r.id)} type="button"
+            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 10px', borderRadius: 20, border: `1px solid ${roleFilter === r.id ? C.clay : C.line}`, background: roleFilter === r.id ? `${C.clay}18` : 'transparent', color: roleFilter === r.id ? C.clay : C.inkMute, cursor: 'pointer' }}>
+            {r.label}
+          </button>
+        ))}
       </div>
 
       {canManagePasswords && (
