@@ -2330,9 +2330,13 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
                       HIDDEN
                     </span>
                   )}
-                  {p.role === 'guest' && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(0,0,0,0.07)', color: C.inkMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Guest
+                  {(p.role === 'guest' || p.role === 'member') && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{
+                      background: p.role === 'member' ? `${C.clay}18` : 'rgba(0,0,0,0.07)',
+                      color: p.role === 'member' ? C.clay : C.inkMute,
+                      fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em'
+                    }}>
+                      {p.role}
                     </span>
                   )}
                 </div>
