@@ -1687,6 +1687,9 @@ function PlayerRow({ player, rank, isMe, isAdmin, matches, onViewProfile, onTogg
           >
             {player.name}{isMe && <span style={{ color: C.clay, fontWeight: 600 }}> · you</span>}
           </button>
+          {player.role === 'guest' && (
+            <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '1px 5px', borderRadius: 3, background: 'rgba(0,0,0,0.07)', color: C.inkMute, flexShrink: 0, fontFamily: '"DM Sans", sans-serif' }}>Guest</span>
+          )}
           {player.liveStreak >= 3 && <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>🔥</span>}
           {player.lossStreak >= 3 && <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>🥶</span>}
         </div>
@@ -2242,7 +2245,7 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <SectionHeading kicker="Club directory" title="Contacts" />
+        <SectionHeading kicker="Club directory" title="Players" />
         {isAdmin && inactiveCount > 0 && (
           <button
             onClick={() => setShowInactive(!showInactive)}
@@ -2325,6 +2328,11 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
                   {isHidden && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: C.inkMute, color: C.parchment, fontWeight: 600 }}>
                       HIDDEN
+                    </span>
+                  )}
+                  {p.role === 'guest' && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(0,0,0,0.07)', color: C.inkMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Guest
                     </span>
                   )}
                 </div>
