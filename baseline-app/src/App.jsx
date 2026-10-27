@@ -1766,23 +1766,22 @@ function Avatar({ name, size = 32 }) {
       style={{ flexShrink: 0, borderRadius: '50%' }}
     >
       <circle cx="50" cy="50" r="50" fill={bg} />
-      {/* Tennis ball seams — two horizontal arcs curving inward toward center */}
+      {/* Tennis ball seams — two horizontal arcs curving inward toward center, behind text */}
       <path
         d="M 8 38 C 28 48, 72 48, 92 38"
         fill="none"
-        stroke={C.clayDeep}
-        strokeWidth="5.5"
+        stroke="#E8C84A"
+        strokeWidth="6"
         strokeLinecap="round"
-        opacity="0.28"
       />
       <path
         d="M 8 62 C 28 52, 72 52, 92 62"
         fill="none"
-        stroke={C.clayDeep}
-        strokeWidth="5.5"
+        stroke="#E8C84A"
+        strokeWidth="6"
         strokeLinecap="round"
-        opacity="0.28"
       />
+      {/* Text rendered last so it sits above the seams */}
       <text
         x="50" y="50"
         dominantBaseline="central"
