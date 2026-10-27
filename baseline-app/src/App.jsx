@@ -1223,14 +1223,21 @@ export default function App() {
       const currentLosses = myMatches.filter(m => m.winnerId !== p.id).length;
       streakMap[p.id] = { wins, losses, recentForm, currentWins, currentLosses };
     });
-    return rank(players).map(p => ({
-      ...p,
-      liveStreak: streakMap[p.id]?.wins || 0,
-      lossStreak: streakMap[p.id]?.losses || 0,
-      recentForm: streakMap[p.id]?.recentForm || [],
-      currentWins: streakMap[p.id]?.currentWins ?? p.wins,
-      currentLosses: streakMap[p.id]?.currentLosses ?? p.losses,
-    }));
+    return [...players]
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        const aMatches = (streakMap[a.id]?.currentWins ?? 0) + (streakMap[a.id]?.currentLosses ?? 0);
+        const bMatches = (streakMap[b.id]?.currentWins ?? 0) + (streakMap[b.id]?.currentLosses ?? 0);
+        return bMatches - aMatches;
+      })
+      .map(p => ({
+        ...p,
+        liveStreak: streakMap[p.id]?.wins || 0,
+        lossStreak: streakMap[p.id]?.losses || 0,
+        recentForm: streakMap[p.id]?.recentForm || [],
+        currentWins: streakMap[p.id]?.currentWins ?? p.wins,
+        currentLosses: streakMap[p.id]?.currentLosses ?? p.losses,
+      }));
   }, [players, matches]);
 
   if (!loggedIn || !me) {
