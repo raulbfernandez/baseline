@@ -2760,7 +2760,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
 
           <button onClick={onAddPlayer}
             className="w-full py-2.5 text-[12px] font-semibold rounded uppercase tracking-[0.1em] mb-2"
-            style={{ border: `1px solid ${C.forest}`, color: C.forest, background: 'transparent', cursor: 'pointer' }}>
+            style={{ border: `1px solid ${C.clay}`, color: C.clay, background: 'transparent', cursor: 'pointer' }}>
             Add Player
           </button>
           <button onClick={() => { if (window.confirm && !window.confirm('Start a new season? This will archive all match history and reset everyone\'s stats to zero. Player accounts are kept. This cannot be undone.')) return; onReset(); }}
