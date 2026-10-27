@@ -498,6 +498,90 @@ function RequestToJoinScreen({ onBack }) {
   );
 }
 
+function InstallBanner() {
+  const [show, setShow] = React.useState(false);
+  const [isIOS, setIsIOS] = React.useState(false);
+  const [deferredPrompt, setDeferredPrompt] = React.useState(null);
+  const [installed, setInstalled] = React.useState(false);
+
+  React.useEffect(() => {
+    // Already installed as PWA
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
+    // Already dismissed
+    try { if (localStorage.getItem('install-banner-dismissed')) return; } catch(e) {}
+
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(ios);
+
+    if (ios) {
+      setShow(true);
+    } else {
+      const handler = (e) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+        setShow(true);
+      };
+      window.addEventListener('beforeinstallprompt', handler);
+      return () => window.removeEventListener('beforeinstallprompt', handler);
+    }
+  }, []);
+
+  const dismiss = () => {
+    setShow(false);
+    try { localStorage.setItem('install-banner-dismissed', '1'); } catch(e) {}
+  };
+
+  const install = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setInstalled(true);
+      setDeferredPrompt(null);
+    }
+    dismiss();
+  };
+
+  if (!show || installed) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
+      background: C.ink, color: C.parchment,
+      padding: '14px 16px 28px', borderTop: `3px solid ${C.clay}`,
+      fontFamily: '"DM Sans", sans-serif',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, maxWidth: 480, margin: '0 auto' }}>
+        <div style={{ fontSize: 28, lineHeight: 1 }}>🎾</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Add to your home screen</div>
+          {isIOS ? (
+            <div style={{ fontSize: 12, color: C.parchmentDeep, lineHeight: 1.5 }}>
+              Tap <strong style={{ color: C.parchment }}>Share</strong> {' '}
+              <span style={{ fontSize: 16 }}>⎙</span> then{' '}
+              <strong style={{ color: C.parchment }}>"Add to Home Screen"</strong> for the full app experience.
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: C.parchmentDeep, lineHeight: 1.5, marginBottom: 10 }}>
+              Install the LFTC app for quick access from your home screen.
+            </div>
+          )}
+          {!isIOS && (
+            <button onClick={install} type="button" style={{
+              marginTop: 8, padding: '7px 18px', borderRadius: 6, fontSize: 12, fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.08em',
+              background: C.clay, color: 'white', border: 'none', cursor: 'pointer',
+            }}>Install App</button>
+          )}
+        </div>
+        <button onClick={dismiss} type="button" style={{
+          background: 'none', border: 'none', color: C.inkMute, fontSize: 20,
+          cursor: 'pointer', padding: '0 4px', lineHeight: 1,
+        }}>✕</button>
+      </div>
+    </div>
+  );
+}
+
 function LoginScreen({ players, passwords, onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -519,6 +603,7 @@ function LoginScreen({ players, passwords, onLogin }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ fontFamily: '"DM Sans", sans-serif', background: '#E8DCC8' }}>
+      <InstallBanner />
       <PaperTexture />
       {/* Tennis court — horizontal net, singles */}
       <div className="fixed inset-0 pointer-events-none" style={{ opacity: 0.2 }}>
