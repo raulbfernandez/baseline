@@ -2213,8 +2213,13 @@ function MatchCard({ match, players, myId, onAccept, onDecline, onCancel, onRepo
         {/* Top row: W/L + opponent + type badge + delete */}
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="flex items-center gap-2 min-w-0">
-            {!isFriendly && <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>}
-            {isFriendly && <span className="text-[9px] font-bold uppercase flex-shrink-0 px-1.5 py-0.5 rounded" style={{ background: C.greenMid, color: 'white' }}>Friendly</span>}
+            {isFriendly
+              ? <span className="text-[9px] font-bold uppercase flex-shrink-0 px-1.5 py-0.5 rounded" style={{ background: C.greenMid, color: 'white' }}>Friendly</span>
+              : <>
+                  <span className="text-[9px] font-bold uppercase flex-shrink-0 px-1.5 py-0.5 rounded" style={{ background: C.clay, color: 'white' }}>Ladder</span>
+                  <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+                </>
+            }
             <span className="text-[14px] font-semibold truncate" style={{ fontFamily: '"Fraunces", serif', color: C.ink }}>{opponent?.name}</span>
             {!isFriendly && <span className="text-[11px] flex-shrink-0" style={{ color: C.inkMute }}>#{oppRank}</span>}
           </div>
@@ -2826,7 +2831,10 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
                     <div className="flex items-center gap-2 min-w-0">
                       {isFriendly
                         ? <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: C.greenMid, color: 'white' }}>Friendly</span>
-                        : <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+                        : <>
+                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: C.clay, color: 'white' }}>Ladder</span>
+                            <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: won ? C.win : C.loss }}>{won ? 'W' : 'L'}</span>
+                          </>
                       }
                       <span className="text-[14px] font-semibold truncate" style={{ fontFamily: '"Fraunces", serif', color: C.ink }}>{opponent?.name || 'Unknown'}</span>
                       {!isFriendly && <span className="text-[11px] flex-shrink-0" style={{ color: C.inkMute }}>#{oppRank}</span>}
