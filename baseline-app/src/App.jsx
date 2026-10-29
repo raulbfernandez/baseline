@@ -2723,7 +2723,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
       )}
 
       {/* Player card */}
-      <div className="relative rounded-xl p-5 mb-4 overflow-hidden" style={{ background: C.clay, color: C.parchment }}>
+      <div className="relative rounded-xl p-5 mb-4 overflow-hidden" style={{ background: C.green, color: C.parchment }}>
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.1 }} preserveAspectRatio="none">
           <line x1="0" y1="100%" x2="100%" y2="100%" stroke="white" strokeWidth="3"/>
           <line x1="0" y1="65%" x2="100%" y2="65%" stroke="white" strokeWidth="1.5"/>
