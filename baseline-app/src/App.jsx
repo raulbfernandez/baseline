@@ -2804,18 +2804,15 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
         </div>
       </div>
 
-      {/* Bottom clay section */}
-      <div className="-mx-5 px-5 pt-5 pb-2 rounded-t-3xl" style={{ background: C.clay }}>
-
       {/* Match History */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>Match History</div>
+          <div className="text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>Match History</div>
           <div className="flex gap-1.5">
             {['all', 'ladder', 'friendly'].map(f => (
               <button key={f} onClick={() => setHistoryFilter(f)}
                 className="text-[10px] uppercase tracking-[0.12em] font-bold px-2.5 py-1 rounded-full"
-                style={{ background: historyFilter === f ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)', color: historyFilter === f ? C.clayDeep : 'rgba(255,255,255,0.7)', border: 'none', cursor: 'pointer' }}>
+                style={{ background: historyFilter === f ? C.ink : C.parchmentWarm, color: historyFilter === f ? C.parchment : C.inkMute, border: 'none', cursor: 'pointer' }}>
                 {f}
               </button>
             ))}
@@ -2867,7 +2864,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
       </div>
 
       {/* Password */}
-      <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: 'none' }}>
+      <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
         <div className="flex items-center justify-between mb-1">
           <span className="text-[12px] font-semibold" style={{ color: C.ink }}>Password</span>
           {!showPasswordChange && (
@@ -2893,7 +2890,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
 
       {/* Admin */}
       {isAdmin && (
-        <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: 'none' }}>
+        <div className="mb-4 rounded-lg p-4" style={{ background: 'rgba(255,255,255,0.88)', border: `1px solid ${C.line}` }}>
           <div className="text-[10px] uppercase tracking-[0.2em] font-bold mb-3" style={{ color: C.inkMute }}>Admin</div>
 
           {/* Pending join requests */}
@@ -2940,11 +2937,9 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
 
       {/* Sign out */}
       <button onClick={onSignOut} className="w-full py-3 mb-6 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
-        style={{ background: 'transparent', border: `1px solid rgba(255,255,255,0.25)`, color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>
+        style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.inkMute, cursor: 'pointer' }}>
         Sign Out
       </button>
-
-      </div>{/* end clay section */}
     </div>
   );
 }
