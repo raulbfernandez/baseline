@@ -1392,7 +1392,7 @@ export default function App() {
     <div
       className="min-h-screen w-full"
       style={{
-        background: '#E8DCC8',
+        background: tab === 'profile' ? C.green : '#E8DCC8',
         fontFamily: '"DM Sans", system-ui, sans-serif',
         color: C.ink,
       }}
