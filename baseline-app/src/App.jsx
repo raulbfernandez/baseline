@@ -1076,6 +1076,7 @@ export default function App() {
     try {
       const db = await sb.from('players');
       const payload = {};
+      if (updates.name !== undefined) payload.name = updates.name;
       if (updates.ustaRating !== undefined) payload.usta_rating = updates.ustaRating || null;
       if (updates.profileImage !== undefined) payload.profile_image = updates.profileImage || null;
       if (Object.keys(payload).length > 0) {
@@ -2647,6 +2648,7 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
   const [confirmPassword, setConfirmPassword] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const [ustaRating, setUstaRating] = useState(me.ustaRating || '');
+  const [displayName, setDisplayName] = useState(me.name || '');
   const [cropSrc, setCropSrc] = useState(null);
   const [historyFilter, setHistoryFilter] = useState('all');
 
@@ -2741,28 +2743,32 @@ function ProfileView({ me, myRank, matches, players, onChangePassword, onUpdateP
             </label>
           </div>
           <div className="flex-1 min-w-0">
-            <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, lineHeight: 1.1, marginBottom: 6 }}>{me.name}</div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.9)', letterSpacing: '0.15em' }}>
-                {me.role === 'guest' ? 'Guest' : 'Member'}
-              </span>
-            </div>
             {editingProfile ? (
               <div className="space-y-2">
+                <input type="text" placeholder="Display name" value={displayName} onChange={e => setDisplayName(e.target.value)}
+                  style={{ width: '100%', padding: '6px 10px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, fontSize: 16, fontFamily: '"Fraunces", serif', fontWeight: 700, background: 'rgba(255,255,255,0.15)', color: 'white', boxSizing: 'border-box' }} />
                 <input type="text" placeholder="USTA rating e.g. 4.5" value={ustaRating} onChange={e => setUstaRating(e.target.value)}
                   style={{ width: '100%', padding: '6px 10px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, fontSize: 14, background: 'rgba(255,255,255,0.15)', color: 'white', boxSizing: 'border-box' }} />
                 <div className="flex gap-2">
-                  <button onClick={() => { onUpdateProfile({ ustaRating }); setEditingProfile(false); }} className="flex-1 py-1.5 text-[10px] font-semibold rounded uppercase tracking-[0.1em]" style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', cursor: 'pointer' }}>Save</button>
-                  <button onClick={() => { setEditingProfile(false); setUstaRating(me.ustaRating || ''); }} className="flex-1 py-1.5 text-[10px] font-semibold rounded uppercase tracking-[0.1em]" style={{ border: '1px solid rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.7)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={() => { if (displayName.trim()) onUpdateProfile({ ustaRating, name: displayName.trim() }); setEditingProfile(false); }} className="flex-1 py-1.5 text-[10px] font-semibold rounded uppercase tracking-[0.1em]" style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', cursor: 'pointer' }}>Save</button>
+                  <button onClick={() => { setEditingProfile(false); setUstaRating(me.ustaRating || ''); setDisplayName(me.name || ''); }} className="flex-1 py-1.5 text-[10px] font-semibold rounded uppercase tracking-[0.1em]" style={{ border: '1px solid rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.7)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                {me.ustaRating && <span style={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, color: C.optic }}>{me.ustaRating} USTA</span>}
-                <button onClick={() => setEditingProfile(true)} style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 8px', border: '1px solid rgba(255,255,255,0.35)', color: 'rgba(255,255,255,0.7)', background: 'transparent', borderRadius: 4, cursor: 'pointer' }}>
-                  {me.ustaRating ? 'Edit' : 'Add USTA'}
-                </button>
-              </div>
+              <>
+                <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, lineHeight: 1.1, marginBottom: 6 }}>{me.name}</div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.9)', letterSpacing: '0.15em' }}>
+                    {me.role === 'guest' ? 'Guest' : 'Member'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {me.ustaRating && <span style={{ fontSize: 12, fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, color: C.optic }}>{me.ustaRating} USTA</span>}
+                  <button onClick={() => setEditingProfile(true)} style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 8px', border: '1px solid rgba(255,255,255,0.35)', color: 'rgba(255,255,255,0.7)', background: 'transparent', borderRadius: 4, cursor: 'pointer' }}>
+                    Edit
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
