@@ -4162,6 +4162,17 @@ function CourtAvailability({ venue, dateTime, onPick }) {
 
   if (daysAhead < 0) return null;
 
+  // If live lookup is unavailable, behave exactly like the old plain booking link.
+  if (state.status === 'error') {
+    return (
+      <a href={VENUE_BOOKING[venue]} target="_blank" rel="noopener noreferrer"
+        className="block mt-2 text-center text-[11px] font-semibold uppercase tracking-[0.1em] py-1.5 rounded"
+        style={{ color: C.clay, border: `1px solid ${C.clay}`, textDecoration: 'none' }}>
+        📅 Book a court
+      </a>
+    );
+  }
+
   return (
     <div className="mt-2 rounded p-3" style={{ background: C.parchmentWarm, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-2">
@@ -4172,12 +4183,6 @@ function CourtAvailability({ venue, dateTime, onPick }) {
           <div className="text-[10px]" style={{ color: C.inkMute }}>Checking…</div>
         )}
       </div>
-
-      {state.status === 'error' && (
-        <div className="text-[11px] mb-2" style={{ color: C.inkMute }}>
-          Couldn't load live availability right now.
-        </div>
-      )}
 
       {state.status === 'ok' && groups.length === 0 && (
         <div className="text-[11px] mb-2" style={{ color: C.inkMute }}>
