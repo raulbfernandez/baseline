@@ -4091,6 +4091,144 @@ function PlayerDetailModal({ player, players, matches, myId, onClose }) {
 /* ============================================================
    CHALLENGE MODAL
    ============================================================ */
+/* ============================================================
+   COURT AVAILABILITY — live open slots from LA Rec & Parks
+   Read-only; players finish booking + payment on the city site.
+   ============================================================ */
+const LIVE_AVAILABILITY_VENUES = ['Vermont Canyon', 'Riverside'];
+
+function laTodayStr() {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const pad = n => String(n).padStart(2, '0');
+  return { date: `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, minutes: d.getHours() * 60 + d.getMinutes() };
+}
+
+function daysBetween(a, b) {
+  return Math.round((new Date(`${b}T12:00:00`) - new Date(`${a}T12:00:00`)) / 86400000);
+}
+
+function CourtAvailability({ venue, dateTime, onPick }) {
+  const dateStr = (dateTime || '').slice(0, 10);
+  const [hh, mm] = (dateTime || '').slice(11, 16).split(':').map(Number);
+  const selectedMin = Number.isFinite(hh) ? hh * 60 + (mm || 0) : null;
+
+  const [state, setState] = useState({ status: 'idle', data: null });
+
+  useEffect(() => {
+    if (!dateStr) return;
+    const ctrl = new AbortController();
+    setState({ status: 'loading', data: null });
+    fetch(`/api/court-availability?venue=${encodeURIComponent(venue)}&date=${dateStr}`, { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('lookup failed')))
+      .then(data => setState({ status: 'ok', data }))
+      .catch(e => { if (e.name !== 'AbortError') setState({ status: 'error', data: null }); });
+    return () => ctrl.abort();
+  }, [venue, dateStr]);
+
+  const today = laTodayStr();
+  const daysAhead = dateStr ? daysBetween(today.date, dateStr) : 0;
+
+  // Group identical time blocks across courts: "10:00 am – 11:00 am · Ct 11, 12"
+  const groups = useMemo(() => {
+    const slots = state.data?.slots || [];
+    const map = new Map();
+    for (const s of slots) {
+      if (daysAhead === 0 && s.startMin <= today.minutes) continue; // already started
+      const key = `${s.startMin}-${s.endMin}`;
+      if (!map.has(key)) map.set(key, { ...s, courts: [] });
+      map.get(key).courts.push(s.court.replace(/^Court\s*/i, ''));
+    }
+    return [...map.values()].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  }, [state.data, daysAhead, today.minutes]);
+
+  const selected = selectedMin == null ? null
+    : groups.find(g => selectedMin >= g.startMin && selectedMin < g.endMin && g.startMin === selectedMin)
+      || groups.find(g => selectedMin >= g.startMin && selectedMin < g.endMin);
+
+  const bookUrl = (() => {
+    const base = state.data?.bookingBaseUrl;
+    if (!base) return VENUE_BOOKING[venue];
+    if (!selected) return base;
+    const u = new URL(base);
+    const [t, ap] = selected.start.split(' ');
+    const [h, m] = t.split(':');
+    u.searchParams.set('begintime', `${h.padStart(2, '0')}:${m} ${ap}`);
+    return u.toString();
+  })();
+
+  const dayLabel = dateStr
+    ? new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : '';
+
+  if (daysAhead < 0) return null;
+
+  return (
+    <div className="mt-2 rounded p-3" style={{ background: C.parchmentWarm, border: `1px solid ${C.line}` }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: C.inkMute }}>
+          Open courts · {dayLabel}
+        </div>
+        {state.status === 'loading' && (
+          <div className="text-[10px]" style={{ color: C.inkMute }}>Checking…</div>
+        )}
+      </div>
+
+      {state.status === 'error' && (
+        <div className="text-[11px] mb-2" style={{ color: C.inkMute }}>
+          Couldn't load live availability right now.
+        </div>
+      )}
+
+      {state.status === 'ok' && groups.length === 0 && (
+        <div className="text-[11px] mb-2" style={{ color: C.inkMute }}>
+          {daysAhead > 7
+            ? 'No open slots yet — courts usually release 8 days ahead at 8am.'
+            : 'No open courts left this day.'}
+        </div>
+      )}
+
+      {state.status === 'ok' && groups.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2" style={{ maxHeight: 132, overflowY: 'auto' }}>
+          {groups.map(g => {
+            const isSel = selected && g.startMin === selected.startMin && g.endMin === selected.endMin;
+            return (
+              <button key={`${g.startMin}-${g.endMin}`} type="button"
+                onClick={() => onPick(g.startMin)}
+                className="text-left px-2 py-1.5 rounded"
+                style={{
+                  background: isSel ? C.clay : C.parchment,
+                  color: isSel ? 'white' : C.ink,
+                  border: `1px solid ${isSel ? C.clay : C.line}`,
+                  cursor: 'pointer', lineHeight: 1.15,
+                }}>
+                <div className="text-[11px] font-semibold">{g.start}–{g.end}</div>
+                <div className="text-[9px]" style={{ opacity: 0.8 }}>
+                  Ct {g.courts.join(', ')}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {state.status === 'ok' && selectedMin != null && groups.length > 0 && !selected && (
+        <div className="text-[10px] mb-2" style={{ color: C.clayMid }}>
+          Your time isn't open — tap a slot above to switch.
+        </div>
+      )}
+
+      <a href={bookUrl} target="_blank" rel="noopener noreferrer"
+        className="block text-center text-[11px] font-semibold uppercase tracking-[0.1em] py-1.5 rounded"
+        style={{ color: C.clay, border: `1px solid ${C.clay}`, textDecoration: 'none' }}>
+        📅 {selected ? `Book ${selected.start} on LA Parks` : 'Book a court'}
+      </a>
+      <div className="text-[9px] mt-1.5 text-center" style={{ color: C.inkMute }}>
+        Booking and payment happen on the LA Parks site under your own account.
+      </div>
+    </div>
+  );
+}
+
 function ChallengeModal({ opponent, me, onClose, onSubmit }) {
   const [matchType, setMatchType] = useState('ladder');
   const [date, setDate] = useState(() => {
@@ -4170,7 +4308,17 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
               className="w-full px-3 py-2.5 rounded text-sm mt-2"
               style={{ background: C.parchmentWarm, border: `1px solid ${C.line}`, color: C.ink, fontFamily: '"DM Sans", sans-serif' }} />
           )}
-          {VENUE_BOOKING[location] && !reportNow && (
+          {LIVE_AVAILABILITY_VENUES.includes(location) && !reportNow && (
+            <CourtAvailability
+              venue={location}
+              dateTime={date}
+              onPick={startMin => {
+                const pad = n => String(n).padStart(2, '0');
+                setDate(`${date.slice(0, 10)}T${pad(Math.floor(startMin / 60))}:${pad(startMin % 60)}`);
+              }}
+            />
+          )}
+          {VENUE_BOOKING[location] && !LIVE_AVAILABILITY_VENUES.includes(location) && !reportNow && (
             <a href={VENUE_BOOKING[location]} target="_blank" rel="noopener noreferrer"
               className="block mt-2 text-center text-[11px] font-semibold uppercase tracking-[0.1em] py-1.5 rounded"
               style={{ color: C.clay, border: `1px solid ${C.clay}`, textDecoration: 'none' }}>
