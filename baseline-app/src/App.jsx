@@ -582,14 +582,204 @@ function InstallBanner() {
   );
 }
 
+/* ── Password reset helpers ── */
+const generateToken = () => Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+
+const saveResetToken = async (playerId, token) => {
+  const expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+  const db = await sb.from('password_resets');
+  await db.upsert({ player_id: playerId, token, expiry });
+};
+
+const verifyResetToken = async (token) => {
+  const db = await sb.from('password_resets');
+  const rows = await db.selectWhere('token', token);
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const row = rows[0];
+  if (new Date(row.expiry) < new Date()) return null; // expired
+  return row.player_id;
+};
+
+const clearResetToken = async (token) => {
+  const db = await sb.from('password_resets');
+  await db.delete({ token });
+};
+
+/* ── Forgot password screen ── */
+function ForgotPasswordScreen({ players, onBack }) {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState('idle'); // idle | sending | sent | error
+
+  const handleSubmit = async () => {
+    const player = players.find(p => p.email.toLowerCase() === email.trim().toLowerCase());
+    if (!player) { setStatus('error'); return; }
+    setStatus('sending');
+    try {
+      const token = generateToken();
+      await saveResetToken(player.id, token);
+      const resetUrl = `${window.location.origin}${window.location.pathname}#reset=${token}`;
+      await sendEmail({
+        to: player.email,
+        subject: 'Reset your LFTC password',
+        html: `
+          <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="color: #2A6B4F;">Reset your password</h2>
+            <p>Hi ${player.name},</p>
+            <p>Click the link below to reset your Los Feliz Tennis Club password. This link expires in 1 hour.</p>
+            <p style="margin: 24px 0;">
+              <a href="${resetUrl}" style="background: #2A6B4F; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">Reset Password</a>
+            </p>
+            <p style="color: #7A6548; font-size: 13px;">If you didn't request this, you can ignore this email.</p>
+            <p style="color: #7A6548; font-size: 13px;">— The Los Feliz Tennis Club Team</p>
+          </div>`,
+      });
+      setStatus('sent');
+    } catch (e) {
+      console.error('Reset email error:', e);
+      setStatus('error');
+    }
+  };
+
+  if (status === 'sent') return (
+    <div className="min-h-screen flex flex-col items-center justify-start px-6 pt-10" style={{ fontFamily: '"DM Sans", sans-serif', background: '#E8DCC8' }}>
+      <PaperTexture />
+      <div className="w-full max-w-sm relative">
+        <div className="flex justify-center" style={{ marginBottom: 24 }}><BaselineLogo size={72} /></div>
+        <div className="rounded-xl p-6" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
+          <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, color: C.ink, marginBottom: 8 }}>Check your email</div>
+          <div className="text-[13px] mb-5" style={{ color: C.inkMute, lineHeight: 1.6 }}>
+            We sent a reset link to <strong style={{ color: C.ink }}>{email}</strong>. Click it to set a new password. The link expires in 1 hour.
+          </div>
+          <button onClick={onBack} className="w-full py-3 rounded-lg text-[13px] font-bold uppercase tracking-[0.1em]" style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer' }}>
+            Back to Sign In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-start px-6 pt-10" style={{ fontFamily: '"DM Sans", sans-serif', background: '#E8DCC8' }}>
+      <PaperTexture />
+      <div className="w-full max-w-sm relative">
+        <div className="flex justify-center" style={{ marginBottom: 24 }}><BaselineLogo size={72} /></div>
+        <div className="rounded-xl p-6" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
+          <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, color: C.ink, marginBottom: 4 }}>Forgot password</div>
+          <div className="text-[12px] mb-5" style={{ color: C.inkMute }}>Enter your club email and we'll send you a reset link.</div>
+          <div className="mb-4">
+            <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+              placeholder="your@email.com" autoComplete="email"
+              style={{ width: '100%', padding: '13px 14px', border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm, boxSizing: 'border-box' }} />
+          </div>
+          {status === 'error' && (
+            <div className="text-[12px] mb-3 px-3 py-2 rounded" style={{ background: `${C.clay}18`, color: C.clay }}>
+              No account found with that email.
+            </div>
+          )}
+          <button onClick={handleSubmit} disabled={status === 'sending'} className="w-full py-3 rounded-lg text-[13px] font-bold uppercase tracking-[0.1em]"
+            style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer', opacity: status === 'sending' ? 0.6 : 1 }}>
+            {status === 'sending' ? 'Sending…' : 'Send Reset Link'}
+          </button>
+          <button onClick={onBack} className="w-full py-2 mt-3 text-[12px]" style={{ background: 'none', border: 'none', color: C.inkMute, cursor: 'pointer' }}>
+            ← Back to Sign In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Set new password screen (shown when ?reset=TOKEN in hash) ── */
+function ResetPasswordScreen({ token, onDone }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [status, setStatus] = useState('idle'); // idle | saving | done | invalid
+  const [playerId, setPlayerId] = useState(null);
+
+  React.useEffect(() => {
+    verifyResetToken(token).then(id => {
+      if (!id) setStatus('invalid');
+      else setPlayerId(id);
+    });
+  }, [token]);
+
+  const handleSave = async () => {
+    if (password.length < 6) return;
+    if (password !== confirm) return;
+    setStatus('saving');
+    try {
+      const db = await sb.from('passwords');
+      await db.upsert({ player_id: playerId, password_hash: password });
+      await clearResetToken(token);
+      window.location.hash = '';
+      setStatus('done');
+    } catch (e) {
+      console.error('Password save error:', e);
+      setStatus('idle');
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-start px-6 pt-10" style={{ fontFamily: '"DM Sans", sans-serif', background: '#E8DCC8' }}>
+      <PaperTexture />
+      <div className="w-full max-w-sm relative">
+        <div className="flex justify-center" style={{ marginBottom: 24 }}><BaselineLogo size={72} /></div>
+        <div className="rounded-xl p-6" style={{ background: 'rgba(255,255,255,0.9)', border: `1px solid ${C.line}` }}>
+          {status === 'invalid' ? (
+            <>
+              <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, color: C.ink, marginBottom: 8 }}>Link expired</div>
+              <div className="text-[13px] mb-5" style={{ color: C.inkMute }}>This reset link has expired or already been used. Please request a new one.</div>
+              <button onClick={onDone} className="w-full py-3 rounded-lg text-[13px] font-bold uppercase tracking-[0.1em]" style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer' }}>Back to Sign In</button>
+            </>
+          ) : status === 'done' ? (
+            <>
+              <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, color: C.ink, marginBottom: 8 }}>Password updated!</div>
+              <div className="text-[13px] mb-5" style={{ color: C.inkMute }}>Your password has been changed. You can now sign in with your new password.</div>
+              <button onClick={onDone} className="w-full py-3 rounded-lg text-[13px] font-bold uppercase tracking-[0.1em]" style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer' }}>Sign In</button>
+            </>
+          ) : (
+            <>
+              <div style={{ fontFamily: '"Fraunces", serif', fontWeight: 700, fontSize: 22, color: C.ink, marginBottom: 4 }}>Set new password</div>
+              <div className="text-[12px] mb-5" style={{ color: C.inkMute }}>Choose a new password for your account.</div>
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>New Password</label>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters"
+                    style={{ width: '100%', padding: '13px 14px', border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm, boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-[0.15em] font-bold block mb-1.5" style={{ color: C.inkMute }}>Confirm Password</label>
+                  <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="Same password again"
+                    style={{ width: '100%', padding: '13px 14px', border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: C.parchmentWarm, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              {password && confirm && password !== confirm && (
+                <div className="text-[12px] mb-3 px-3 py-2 rounded" style={{ background: `${C.clay}18`, color: C.clay }}>Passwords don't match</div>
+              )}
+              <button onClick={handleSave} disabled={status === 'saving' || password.length < 6 || password !== confirm}
+                className="w-full py-3 rounded-lg text-[13px] font-bold uppercase tracking-[0.1em]"
+                style={{ background: C.clay, color: 'white', border: 'none', cursor: 'pointer', opacity: (status === 'saving' || password.length < 6 || password !== confirm) ? 0.5 : 1 }}>
+                {status === 'saving' ? 'Saving…' : 'Set Password'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoginScreen({ players, passwords, onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showJoinRequest, setShowJoinRequest] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   if (showJoinRequest) return <RequestToJoinScreen onBack={() => setShowJoinRequest(false)} />;
+  if (showForgot) return <ForgotPasswordScreen players={players} onBack={() => setShowForgot(false)} />;
 
   const handleLogin = () => {
     const normalized = email.trim().toLowerCase();
@@ -683,8 +873,13 @@ function LoginScreen({ players, passwords, onLogin }) {
             Sign In
           </button>
 
-          <div className="text-[11px] text-center mt-4" style={{ color: C.inkMute }}>
-            Default password: <span style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink }}>tennis123</span>
+          <div className="flex items-center justify-between mt-3">
+            <div className="text-[11px]" style={{ color: C.inkMute }}>
+              Default: <span style={{ fontFamily: '"JetBrains Mono", monospace', color: C.ink }}>tennis123</span>
+            </div>
+            <button onClick={() => setShowForgot(true)} type="button" className="text-[11px]" style={{ background: 'none', border: 'none', color: C.clay, cursor: 'pointer', padding: 0 }}>
+              Forgot password?
+            </button>
           </div>
 
           <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
@@ -718,6 +913,11 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState(null);
+  const [resetToken, setResetToken] = useState(() => {
+    const hash = window.location.hash;
+    const m = hash.match(/^#reset=(.+)$/);
+    return m ? m[1] : null;
+  });
 
   /* Inject editorial fonts */
   useEffect(() => {
@@ -1384,6 +1584,10 @@ export default function App() {
         currentLosses: streakMap[p.id]?.currentLosses ?? p.losses,
       }));
   }, [players, matches]);
+
+  if (resetToken) {
+    return <ResetPasswordScreen token={resetToken} onDone={() => setResetToken(null)} />;
+  }
 
   if (!loggedIn || !me) {
     return <LoginScreen players={players} passwords={passwords} onLogin={handleLogin} />;
