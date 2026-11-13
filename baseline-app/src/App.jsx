@@ -2359,9 +2359,9 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
 
   const inactiveCount = players.filter(p => p.isActive === false).length;
 
-  const handleResetPassword = (playerEmail, playerName) => {
+  const handleResetPassword = (playerId, playerName) => {
     if (window.confirm(`Reset password for ${playerName} to default (tennis123)?`)) {
-      onResetPassword(playerEmail);
+      onResetPassword(playerId);
     }
   };
 
@@ -2535,7 +2535,7 @@ function ContactsView({ players, myId, isAdmin, canManagePasswords, onResetPassw
                 )}
                 {canManagePasswords && (
                   <button
-                    onClick={() => handleResetPassword(p.email, p.name)}
+                    onClick={() => handleResetPassword(p.id, p.name)}
                     className="text-[10px] uppercase tracking-[0.1em] px-2 py-1 rounded flex items-center gap-1"
                     style={{ background: C.clay, color: C.parchment }}
                   >
