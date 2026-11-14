@@ -714,6 +714,9 @@ function ResetPasswordScreen({ token, onDone }) {
       await clearResetToken(token);
       window.location.hash = '';
       setStatus('done');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1800);
     } catch (e) {
       console.error('Password save error:', e);
       setStatus('idle');
