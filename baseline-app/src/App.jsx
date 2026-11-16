@@ -1381,8 +1381,8 @@ export default function App() {
   };
 
   /* Report score and update points */
-  const reportScore = async ({ matchId, winnerId, scoreStr, sets }) => {
-    const match = matches.find(m => m.id === matchId);
+  const reportScore = async ({ matchId, winnerId, scoreStr, sets, matchObj }) => {
+    const match = matchObj || matches.find(m => m.id === matchId);
     if (!match) return;
     const loserId = winnerId === match.a ? match.b : match.a;
     const winnerSide = winnerId === match.a ? 'a' : 'b';
@@ -1409,7 +1409,7 @@ export default function App() {
     });
     setPlayers(newPlayers);
 
-    const updatedMatch = { ...matches.find(m => m.id === matchId), status: 'completed', winnerId, score: scoreStr, sets, date: new Date().toISOString().slice(0,10), winnerChange: winnerPoints, loserChange: loserPoints, change: winnerId === currentUserId ? winnerPoints : loserPoints };
+    const updatedMatch = { ...match, status: 'completed', winnerId, score: scoreStr, sets, date: new Date().toISOString().slice(0,10), winnerChange: winnerPoints, loserChange: loserPoints, change: winnerId === currentUserId ? winnerPoints : loserPoints };
     setMatches(prev => prev.map(m => m.id === matchId ? updatedMatch : m));
 
     // Sync to Supabase
@@ -1659,11 +1659,11 @@ export default function App() {
           onClose={() => setModal(null)}
           onSubmit={(data) => {
             if (data.reportNow) {
-              // Create match as scheduled then immediately report the score
+              // Create match and immediately report score, passing matchObj directly to avoid state timing issues
               const matchId = 'm' + Date.now();
               const newMatch = { id: matchId, a: currentUserId, b: data.opponentId, status: 'scheduled', matchType: data.matchType, proposedDate: data.date, location: data.location, createdAt: new Date().toISOString().slice(0, 10) };
               setMatches(prev => [...prev, newMatch]);
-              syncMatch(newMatch).then(() => reportScore({ matchId, winnerId: data.winnerId, scoreStr: data.scoreStr, sets: data.sets }));
+              syncMatch(newMatch).then(() => reportScore({ matchId, winnerId: data.winnerId, scoreStr: data.scoreStr, sets: data.sets, matchObj: newMatch }));
             } else {
               proposeChallenge(data);
             }
