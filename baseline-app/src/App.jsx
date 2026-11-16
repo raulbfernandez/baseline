@@ -4452,14 +4452,85 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
   const [location, setLocation] = useState(VENUES[0]);
   const [customLocation, setCustomLocation] = useState('');
   const [reportNow, setReportNow] = useState(false);
-  const [winnerId, setWinnerId] = useState('');
-  const [sets, setSets] = useState([{ a: '', b: '' }, { a: '', b: '' }, { a: '', b: '' }]);
+  // Score state (matches ReportModal exactly)
+  const [sets, setSets] = useState([{ a: 0, b: 0 }, { a: 0, b: 0 }, null]);
+  const [thirdSetType, setThirdSetType] = useState('full');
+  const [tiebreaks, setTiebreaks] = useState({ 0: null, 1: null });
 
   const finalLocation = location === 'Other' ? customLocation : location;
 
-  const resolvedSets = sets.filter(s => s.a !== '' && s.b !== '');
-  const scoreStr = resolvedSets.map(s => `${s.a}-${s.b}`).join(', ');
-  const canSubmit = !reportNow || (winnerId && resolvedSets.length >= 2);
+  const updateSet = (idx, who, val) => {
+    const is3rdTiebreak = idx === 2 && thirdSetType === 'tiebreak';
+    const maxVal = is3rdTiebreak ? 10 : 7;
+    const v = Math.max(0, Math.min(maxVal, Number(val)));
+    const newSets = [...sets];
+    if (!newSets[idx]) newSets[idx] = { a: 0, b: 0 };
+    const updated = { ...newSets[idx], [who]: v };
+    newSets[idx] = updated;
+    setSets(newSets);
+    if (!is3rdTiebreak && !(updated.a === 6 && updated.b === 6)) {
+      setTiebreaks(prev => ({ ...prev, [idx]: null }));
+    }
+  };
+
+  const updateTiebreak = (idx, who, val) => {
+    setTiebreaks(prev => ({ ...prev, [idx]: { ...(prev[idx] || { a: 0, b: 0 }), [who]: Math.max(0, Number(val)) } }));
+  };
+
+  const setWinnerFn = (s, idx) => {
+    if (!s) return null;
+    if (s.a === 6 && s.b === 6) {
+      const tb = tiebreaks[idx];
+      if (!tb) return null;
+      if (tb.a >= 7 && tb.a - tb.b >= 2) return 'a';
+      if (tb.b >= 7 && tb.b - tb.a >= 2) return 'b';
+      return null;
+    }
+    if (s.a > s.b) return 'a';
+    if (s.b > s.a) return 'b';
+    return null;
+  };
+
+  const validSets = sets.filter(s => s !== null);
+  const setsWonA = validSets.filter((s, i) => setWinnerFn(s, i) === 'a').length;
+  const setsWonB = validSets.filter((s, i) => setWinnerFn(s, i) === 'b').length;
+  const winnerSide = setsWonA > setsWonB ? 'a' : setsWonB > setsWonA ? 'b' : null;
+  const winnerId = winnerSide === 'a' ? me?.id : winnerSide === 'b' ? opponent.id : null;
+  const w1 = setWinnerFn(sets[0], 0);
+  const w2 = setWinnerFn(sets[1], 1);
+  const firstTwoSplit = w1 && w2 && w1 !== w2;
+
+  useEffect(() => {
+    if (!firstTwoSplit && sets[2] !== null) {
+      setSets(prev => { const n = [...prev]; n[2] = null; return n; });
+    }
+  }, [firstTwoSplit]);
+
+  const resolvedSets = validSets.map((s, i) => {
+    if (s.a === 6 && s.b === 6) {
+      const w = setWinnerFn(s, i);
+      if (w === 'a') return { a: 7, b: 6 };
+      if (w === 'b') return { a: 6, b: 7 };
+    }
+    return s;
+  });
+
+  const scoreStr = validSets.map((s, idx) => {
+    if (idx === 2 && thirdSetType === 'tiebreak') return `[${s.a}-${s.b}]`;
+    if (s.a === 6 && s.b === 6) {
+      const tb = tiebreaks[idx];
+      return tb ? `7-6 (${Math.max(tb.a, tb.b)})` : '7-6';
+    }
+    return `${s.a}-${s.b}`;
+  }).join(', ');
+
+  const earned = winnerSide ? calcPoints(resolvedSets, winnerSide) : { a: 1, b: 1 };
+  const isStraightSets = validSets.length === 2 && winnerSide !== null;
+  const regularOpts = [0,1,2,3,4,5,6,7];
+  const tbOpts = [0,1,2,3,4,5,6,7,8,9,10,11,12];
+  const longTbOpts = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+
+  const canSubmit = !reportNow || !!winnerId;
 
   const accentColor = matchType === 'friendly' ? C.green : C.clay;
 
@@ -4550,31 +4621,83 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
         <span style={{ fontSize: 16 }}>{reportNow ? '✓' : '+'}</span>
       </button>
 
-      {/* Score entry */}
+      {/* Score entry — identical to ReportModal */}
       {reportNow && (
-        <div className="mb-4 space-y-3">
-          <div>
-            <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-2" style={{ color: C.inkMute }}>Winner</label>
-            <div className="flex gap-2">
-              {[{ id: me?.id, label: me?.name || 'You' }, { id: opponent.id, label: opponent.name }].map(p => (
-                <button key={p.id} onClick={() => setWinnerId(p.id)}
-                  className="flex-1 py-2 rounded text-[11px] font-semibold uppercase tracking-[0.1em]"
-                  style={{ background: winnerId === p.id ? accentColor : C.parchmentWarm, color: winnerId === p.id ? 'white' : C.ink, border: `1.5px solid ${winnerId === p.id ? accentColor : C.line}` }}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
+        <div className="mb-4">
+          {/* Player name headers */}
+          <div className="grid mb-1" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px' }}>
+            <div />
+            <div className="text-center text-[11px] uppercase tracking-[0.12em] font-bold truncate" style={{ color: C.clay }}>{(me?.name || 'You').split(' ')[0]} ★</div>
+            <div />
+            <div className="text-center text-[11px] uppercase tracking-[0.12em] font-bold truncate" style={{ color: C.inkMute }}>{opponent.name.split(' ')[0]}</div>
+            <div />
           </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-[0.2em] font-bold block mb-2" style={{ color: C.inkMute }}>Score (sets)</label>
-            {sets.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 mb-2">
-                <span className="text-[10px] uppercase tracking-[0.1em]" style={{ color: C.inkMute, width: 32 }}>Set {i + 1}</span>
-                <ScoreDropdown value={s.a} onChange={v => setSets(prev => prev.map((x, j) => j === i ? { ...x, a: v } : x))} label={me?.name || 'You'} />
-                <span style={{ color: C.inkMute }}>–</span>
-                <ScoreDropdown value={s.b} onChange={v => setSets(prev => prev.map((x, j) => j === i ? { ...x, b: v } : x))} label={opponent.name} />
+
+          {/* Set rows */}
+          <div className="space-y-2 mb-3">
+            {sets.map((set, idx) => set === null ? null : (
+              <div key={idx}>
+                <div className="grid items-center gap-1" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px' }}>
+                  <div className="text-[10px] uppercase tracking-[0.1em] font-bold" style={{ color: C.inkMute }}>
+                    {idx === 2 && thirdSetType === 'tiebreak' ? 'TB' : `Set ${idx + 1}`}
+                  </div>
+                  <ScoreDropdown value={set.a} onChange={v => updateSet(idx, 'a', v)} highlight={setWinnerFn(set, idx) === 'a'} options={idx === 2 && thirdSetType === 'tiebreak' ? tbOpts : regularOpts} />
+                  <div className="text-center font-bold" style={{ color: C.inkMute, fontFamily: '"JetBrains Mono", monospace', fontSize: 16 }}>–</div>
+                  <ScoreDropdown value={set.b} onChange={v => updateSet(idx, 'b', v)} highlight={setWinnerFn(set, idx) === 'b'} options={idx === 2 && thirdSetType === 'tiebreak' ? tbOpts : regularOpts} />
+                  {idx === 2
+                    ? <button onClick={() => setSets(prev => { const n = [...prev]; n[2] = null; return n; })} style={{ color: C.inkMute, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}><X size={14} /></button>
+                    : <div />}
+                </div>
+                {set.a === 6 && set.b === 6 && !(idx === 2 && thirdSetType === 'tiebreak') && (
+                  <div className="grid items-center gap-1 mt-1 px-1 py-2 rounded" style={{ gridTemplateColumns: '52px 1fr 28px 1fr 28px', background: `${C.clay}12`, border: `1px solid ${C.clay}30` }}>
+                    <div className="text-[10px] uppercase tracking-[0.1em] font-bold" style={{ color: C.clay }}>TB</div>
+                    <ScoreDropdown value={tiebreaks[idx]?.a ?? 0} onChange={v => updateTiebreak(idx, 'a', v)} highlight={(() => { const tb = tiebreaks[idx]; return !!(tb && tb.a >= 7 && tb.a - tb.b >= 2); })()} options={longTbOpts} />
+                    <div className="text-center font-bold" style={{ color: C.inkMute, fontFamily: '"JetBrains Mono", monospace', fontSize: 16 }}>–</div>
+                    <ScoreDropdown value={tiebreaks[idx]?.b ?? 0} onChange={v => updateTiebreak(idx, 'b', v)} highlight={(() => { const tb = tiebreaks[idx]; return !!(tb && tb.b >= 7 && tb.b - tb.a >= 2); })()} options={longTbOpts} />
+                    <div />
+                  </div>
+                )}
+                {idx === 2 && (
+                  <div className="flex gap-1 mt-2">
+                    {[{ id: 'full', label: 'Full set' }, { id: 'tiebreak', label: '10-pt TB' }].map(opt => (
+                      <button key={opt.id} onClick={() => setThirdSetType(opt.id)}
+                        className="flex-1 py-1.5 text-[10px] uppercase tracking-[0.1em] font-semibold rounded"
+                        style={{ background: thirdSetType === opt.id ? accentColor : 'transparent', color: thirdSetType === opt.id ? 'white' : C.inkMute, border: `1px solid ${thirdSetType === opt.id ? accentColor : C.line}` }}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
+          </div>
+
+          {sets[2] === null && firstTwoSplit && (
+            <button onClick={() => setSets(prev => { const n = [...prev]; n[2] = { a: 0, b: 0 }; return n; })}
+              className="w-full py-2.5 mb-3 text-[11px] uppercase tracking-[0.15em] font-semibold rounded"
+              style={{ border: `1px dashed ${accentColor}`, color: accentColor }}>
+              + Add 3rd set
+            </button>
+          )}
+
+          {/* Points preview */}
+          <div className="rounded-lg p-3 mb-4" style={{ background: C.parchmentWarm, border: `1px solid ${C.line}` }}>
+            <div className="text-[9px] uppercase tracking-[0.2em] font-bold mb-2" style={{ color: C.inkMute }}>Points Earned</div>
+            <div className="flex items-center justify-between">
+              <div className="text-center flex-1">
+                <div className="text-[10px] uppercase tracking-[0.1em] mb-1 truncate" style={{ color: C.inkMute }}>{(me?.name || 'You').split(' ')[0]}</div>
+                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, fontSize: 24, color: winnerSide === 'a' ? C.clay : C.ink }}>+{matchType === 'friendly' ? 0 : earned.a}</div>
+                {winnerSide === 'a' && <div className="text-[9px] font-bold mt-0.5" style={{ color: C.win }}>Winner</div>}
+              </div>
+              <div style={{ color: C.line, fontSize: 16, fontWeight: 300 }}>vs</div>
+              <div className="text-center flex-1">
+                <div className="text-[10px] uppercase tracking-[0.1em] mb-1 truncate" style={{ color: C.inkMute }}>{opponent.name.split(' ')[0]}</div>
+                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 700, fontSize: 24, color: winnerSide === 'b' ? C.clay : C.ink }}>+{matchType === 'friendly' ? 0 : earned.b}</div>
+                {winnerSide === 'b' && <div className="text-[9px] font-bold mt-0.5" style={{ color: C.win }}>Winner</div>}
+              </div>
+            </div>
+            {isStraightSets && matchType !== 'friendly' && <div className="mt-2 text-center text-[10px] font-semibold" style={{ color: C.green }}>★ Straight sets bonus</div>}
+            {!winnerSide && validSets.length > 0 && <div className="mt-2 text-center text-[10px]" style={{ color: C.clay }}>Enter scores to determine winner</div>}
           </div>
         </div>
       )}
@@ -4587,7 +4710,7 @@ function ChallengeModal({ opponent, me, onClose, onSubmit }) {
         <button
           onClick={() => {
             if (!canSubmit) return;
-            onSubmit({ opponentId: opponent.id, date, location: finalLocation, matchType, reportNow, winnerId, scoreStr, sets: resolvedSets });
+            onSubmit({ opponentId: opponent.id, date, location: finalLocation, matchType, reportNow, winnerId: reportNow ? winnerId : undefined, scoreStr: reportNow ? scoreStr : undefined, sets: reportNow ? resolvedSets : undefined });
           }}
           className="flex-1 py-3 text-[12px] font-semibold rounded uppercase tracking-[0.1em]"
           style={{ background: canSubmit ? accentColor : C.line, color: 'white' }}>
